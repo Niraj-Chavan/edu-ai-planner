@@ -1,10 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardList, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 
 interface UpcomingTask {
   id: string;
@@ -15,47 +13,29 @@ interface UpcomingTask {
 }
 
 const UpcomingTasks = () => {
-  const [tasks, setTasks] = useState<UpcomingTask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-
-  const fetchTasks = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .filter('completed', 'eq', false)
-        .order('due_date', { ascending: true });
-
-      if (error) {
-        throw error;
-      }
-
-      const formattedTasks = data.map(task => ({
-        id: task.id,
-        title: task.title,
-        dueDate: task.due_date || new Date().toISOString(),
-        priority: (task.priority as UpcomingTask['priority']) || 'medium',
-        course: task.course || 'N/A'
-      }));
-
-      setTasks(formattedTasks);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load your tasks. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
+  const tasks: UpcomingTask[] = [
+    {
+      id: '1',
+      title: 'Physics Lab Report',
+      dueDate: '2025-04-13T23:59:59',
+      priority: 'high',
+      course: 'PHY201'
+    },
+    {
+      id: '2',
+      title: 'Literature Essay Draft',
+      dueDate: '2025-04-15T23:59:59',
+      priority: 'medium',
+      course: 'LIT101'
+    },
+    {
+      id: '3',
+      title: 'Computer Science Project',
+      dueDate: '2025-04-18T23:59:59',
+      priority: 'high',
+      course: 'CS450'
     }
-  };
-
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  ];
 
   const getPriorityBadgeClass = (priority: UpcomingTask['priority']) => {
     switch (priority) {
@@ -98,11 +78,7 @@ const UpcomingTasks = () => {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center items-center h-24">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-          </div>
-        ) : tasks.length === 0 ? (
+        {tasks.length === 0 ? (
           <p className="text-sm text-muted-foreground">No upcoming tasks!</p>
         ) : (
           <div className="space-y-3">

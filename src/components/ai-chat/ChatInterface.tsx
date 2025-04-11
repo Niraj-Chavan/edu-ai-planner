@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Send, Plus, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -15,10 +14,16 @@ interface Message {
 }
 
 const ChatInterface = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      content: "Hi there! I'm your EduBuddy assistant. How can I help you plan your academic schedule today?",
+      sender: 'ai',
+      timestamp: new Date(),
+    }
+  ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -30,143 +35,40 @@ const ChatInterface = () => {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    const fetchChatHistory = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('chat_messages')
-          .select('*')
-          .order('timestamp', { ascending: true });
-
-        if (error) {
-          throw error;
-        }
-
-        if (data.length === 0) {
-          // If no messages found, add initial greeting message
-          const welcomeMessage = {
-            content: "Hi there! I'm your EduBuddy assistant. How can I help you plan your academic schedule today?",
-            sender: 'ai',
-          };
-
-          const { data: newMessage, error: insertError } = await supabase
-            .from('chat_messages')
-            .insert(welcomeMessage)
-            .select();
-
-          if (insertError) throw insertError;
-
-          setMessages([{
-            id: newMessage[0].id,
-            content: newMessage[0].content,
-            sender: newMessage[0].sender as 'ai',
-            timestamp: new Date(newMessage[0].timestamp)
-          }]);
-        } else {
-          // Map database messages to our format
-          const formattedMessages = data.map(msg => ({
-            id: msg.id,
-            content: msg.content,
-            sender: msg.sender as 'user' | 'ai',
-            timestamp: new Date(msg.timestamp)
-          }));
-          
-          setMessages(formattedMessages);
-        }
-      } catch (error) {
-        console.error('Error fetching chat history:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load chat history. Please try again.",
-          variant: "destructive"
-        });
-        // Fallback to default message if error
-        setMessages([{
-          id: 'default',
-          content: "Hi there! I'm your EduBuddy assistant. How can I help you plan your academic schedule today?",
-          sender: 'ai',
-          timestamp: new Date(),
-        }]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchChatHistory();
-  }, []);
-
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
-    // Prepare user message
-    const userMessageContent = input.trim();
+    // Add user message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: input,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
 
-    try {
-      // Insert user message to database
-      const { data: userData, error: userError } = await supabase
-        .from('chat_messages')
-        .insert({
-          content: userMessageContent,
-          sender: 'user',
-        })
-        .select();
-
-      if (userError) throw userError;
-
-      const userMessage: Message = {
-        id: userData[0].id,
-        content: userData[0].content,
-        sender: 'user',
-        timestamp: new Date(userData[0].timestamp),
+    // Simulate AI response (In a real app, this would be an API call)
+    setTimeout(() => {
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: generateAIResponse(input),
+        sender: 'ai',
+        timestamp: new Date(),
       };
-
-      setMessages(prev => [...prev, userMessage]);
-
-      // Generate AI response (in a real app, this might be an API call)
-      setTimeout(async () => {
-        const aiResponseContent = generateAIResponse(userMessageContent);
-        
-        // Insert AI response to database
-        const { data: aiData, error: aiError } = await supabase
-          .from('chat_messages')
-          .insert({
-            content: aiResponseContent,
-            sender: 'ai',
-          })
-          .select();
-
-        if (aiError) throw aiError;
-
-        const aiMessage: Message = {
-          id: aiData[0].id,
-          content: aiData[0].content,
-          sender: 'ai',
-          timestamp: new Date(aiData[0].timestamp),
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-        setIsTyping(false);
-
-        // Show toast notification for task creation
-        if (userMessageContent.toLowerCase().includes('assignment') || userMessageContent.toLowerCase().includes('project')) {
-          toast({
-            title: "Task Created",
-            description: "I've added this task to your schedule.",
-          });
-        }
-      }, 1500);
-    } catch (error) {
-      console.error('Error sending message:', error);
+      setMessages(prev => [...prev, aiMessage]);
       setIsTyping(false);
-      toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive"
-      });
-    }
+
+      // Show toast notification for task creation
+      if (input.toLowerCase().includes('assignment') || input.toLowerCase().includes('project')) {
+        toast({
+          title: "Task Created",
+          description: "I've added this task to your schedule.",
+        });
+      }
+    }, 1500);
   };
 
   const generateAIResponse = (userInput: string): string => {
@@ -213,39 +115,31 @@ const ChatInterface = () => {
       </div>
       
       <div className="flex-1 p-4 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-full">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-accent"></div>
-          </div>
-        ) : (
-          <>
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "mb-4 max-w-[80%] rounded-lg p-3",
-                  message.sender === 'user' 
-                    ? "bg-accent text-white ml-auto" 
-                    : "bg-secondary mr-auto"
-                )}
-              >
-                <p className="text-sm">{message.content}</p>
-                <span className="text-xs opacity-70 mt-1 block text-right">
-                  {getTimeString(message.timestamp)}
-                </span>
-              </div>
-            ))}
-            
-            {isTyping && (
-              <div className="mb-4 max-w-[80%] rounded-lg p-3 bg-secondary mr-auto">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light"></div>
-                  <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light delay-150"></div>
-                  <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light delay-300"></div>
-                </div>
-              </div>
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={cn(
+              "mb-4 max-w-[80%] rounded-lg p-3",
+              message.sender === 'user' 
+                ? "bg-accent text-white ml-auto" 
+                : "bg-secondary mr-auto"
             )}
-          </>
+          >
+            <p className="text-sm">{message.content}</p>
+            <span className="text-xs opacity-70 mt-1 block text-right">
+              {getTimeString(message.timestamp)}
+            </span>
+          </div>
+        ))}
+        
+        {isTyping && (
+          <div className="mb-4 max-w-[80%] rounded-lg p-3 bg-secondary mr-auto">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light"></div>
+              <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light delay-150"></div>
+              <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light delay-300"></div>
+            </div>
+          </div>
         )}
         
         <div ref={endOfMessagesRef} />
@@ -262,9 +156,8 @@ const ChatInterface = () => {
             onKeyDown={handleKeyDown}
             placeholder="Message EduBuddy..."
             className="flex-1"
-            disabled={isLoading}
           />
-          <Button onClick={handleSendMessage} disabled={!input.trim() || isLoading}>
+          <Button onClick={handleSendMessage} disabled={!input.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </div>
