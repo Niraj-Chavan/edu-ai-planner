@@ -1,13 +1,36 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React from 'react';
+import AppLayout from '@/components/layout/AppLayout';
+import ChatInterface from '@/components/ai-chat/ChatInterface';
+import DailySchedule from '@/components/smart-planner/DailySchedule';
+import ProductivityChart from '@/components/progress-tracker/ProductivityChart';
+import ResourceSuggestions from '@/components/study-helper/ResourceSuggestions';
+import WelcomeCard from '@/components/dashboard/WelcomeCard';
+import UpcomingTasks from '@/components/dashboard/UpcomingTasks';
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
+    <AppLayout>
+      <div className="space-y-6">
+        <WelcomeCard />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <ChatInterface />
+          </div>
+          
+          <div className="space-y-6">
+            <UpcomingTasks />
+            <DailySchedule />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <ProductivityChart />
+          <ResourceSuggestions />
+        </div>
       </div>
-    </div>
+    </AppLayout>
   );
 };
 
