@@ -10,7 +10,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Planner from "./pages/Planner";
-import Progress from "./pages/Progress";
+import ProgressPage from "./pages/Progress";
 import Study from "./pages/Study";
 import Settings from "./pages/Settings";
 
@@ -37,7 +37,7 @@ const App = () => (
             } />
             <Route path="/progress" element={
               <ProtectedRoute>
-                <Progress />
+                <ProgressPage />
               </ProtectedRoute>
             } />
             <Route path="/study" element={

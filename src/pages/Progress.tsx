@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { BookOpen, Clock, CheckCircle, BarChart2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Progress } from "@/components/ui/progress";
+import { Progress as ProgressBar } from "@/components/ui/progress";
 
-const Progress = () => {
+const ProgressPage = () => {
   const { user } = useAuth();
   const [taskCompletion, setTaskCompletion] = useState(0);
   const [studyHours, setStudyHours] = useState(0);
@@ -112,7 +112,7 @@ const Progress = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold mb-2">{taskCompletion}%</div>
-              <Progress value={taskCompletion} className="h-2" />
+              <ProgressBar value={taskCompletion} className="h-2" />
             </CardContent>
           </Card>
           
@@ -161,7 +161,7 @@ const Progress = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip />
+                    <RechartsTooltip />
                     <Legend />
                     <Line type="monotone" dataKey="Tasks Completed" stroke="#8884d8" activeDot={{ r: 8 }} />
                     <Line type="monotone" dataKey="Study Hours" stroke="#82ca9d" />
@@ -193,7 +193,7 @@ const Progress = () => {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <RechartsTooltip />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -205,4 +205,4 @@ const Progress = () => {
   );
 };
 
-export default Progress;
+export default ProgressPage;
