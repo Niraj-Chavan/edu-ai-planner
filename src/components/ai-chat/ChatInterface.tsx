@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -763,4 +764,173 @@ const ChatInterface = () => {
     
     const timeMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?/);
     if (timeMatch) {
-      hours = parseInt(
+      hours = parseInt(timeMatch[1]);
+      minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      
+      if (isPM && hours < 12) {
+        hours += 12;
+      } else if (isAM && hours === 12) {
+        hours = 0;
+      }
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  // Mock functions for creating tasks and schedule items (since we don't have real tables yet)
+  const createTask = async (taskDetails: any) => {
+    // In a real app, this would save to a tasks table
+    console.log('Creating task:', taskDetails);
+    return { success: true };
+  };
+
+  const createScheduleItem = async (scheduleDetails: any) => {
+    // In a real app, this would save to a schedule_items table
+    console.log('Creating schedule item:', scheduleDetails);
+    return { success: true };
+  };
+
+  // Speech recognition functions
+  const startListening = () => {
+    if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      toast.error("Speech recognition not supported in this browser");
+      return;
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+    
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      setInput(transcript);
+    };
+    
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error', event.error);
+      setIsListening(false);
+    };
+    
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    
+    recognition.start();
+    recognitionRef.current = recognition;
+  };
+  
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  return (
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2">
+          <Bot className="h-5 w-5 text-accent" />
+          EduBuddy Assistant
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-y-auto pr-2 mb-4 space-y-4">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn(
+                "flex items-start gap-3 rounded-lg p-3",
+                message.sender === 'user' 
+                  ? "bg-accent text-white ml-6 bg-chat-user-message-bg text-chat-user-message-text" 
+                  : "bg-secondary mr-6 bg-chat-ai-message-bg text-chat-ai-message-text"
+              )}
+            >
+              {message.sender === 'ai' ? (
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src="/placeholder.svg" alt="EduBuddy" />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">AI</AvatarFallback>
+                </Avatar>
+              ) : (
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src="/placeholder.svg" alt="You" />
+                  <AvatarFallback className="bg-background border border-accent text-xs">You</AvatarFallback>
+                </Avatar>
+              )}
+              <div className="flex-1 overflow-hidden">
+                <p className="whitespace-pre-line break-words text-sm">
+                  {message.content}
+                </p>
+                <div className="mt-1 text-xs opacity-70">
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {isTyping && (
+            <div className="flex items-start gap-3 rounded-lg p-3 bg-secondary mr-6">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="/placeholder.svg" alt="EduBuddy" />
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs">AI</AvatarFallback>
+              </Avatar>
+              <div className="flex items-center gap-1.5">
+                <div className="h-2 w-2 rounded-full bg-accent animate-pulse-light"></div>
+                <div className="h-2 w-2 rounded-full bg-accent animate-pulse-light delay-150"></div>
+                <div className="h-2 w-2 rounded-full bg-accent animate-pulse-light delay-300"></div>
+              </div>
+            </div>
+          )}
+          
+          <div ref={endOfMessagesRef} />
+        </div>
+        
+        <div className="relative mt-auto">
+          <Input
+            placeholder="Ask me anything about your schedule..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+            className="pr-20"
+          />
+          <div className="absolute right-1 top-1 flex space-x-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 rounded-full"
+              onClick={isListening ? stopListening : startListening}
+            >
+              {isListening ? (
+                <StopCircle className="h-4 w-4 text-destructive" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 rounded-full"
+              onClick={handleSendMessage}
+              disabled={!input.trim()}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ChatInterface;
