@@ -33,6 +33,51 @@ export type Database = {
         }
         Relationships: []
       }
+      niraj: {
+        Row: {
+          created_at: string
+          id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          education_level: string | null
+          id: string
+          major: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          education_level?: string | null
+          id: string
+          major?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          education_level?: string | null
+          id?: string
+          major?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
       schedule_items: {
         Row: {
           category: string | null

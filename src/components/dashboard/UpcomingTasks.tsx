@@ -1,9 +1,12 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardList, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface UpcomingTask {
   id: string;
@@ -16,6 +19,7 @@ interface UpcomingTask {
 type Task = Database['public']['Tables']['tasks']['Row'];
 
 const UpcomingTasks = () => {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<UpcomingTask[]>([
     {
       id: '1',
@@ -46,6 +50,7 @@ const UpcomingTasks = () => {
         const { data, error } = await supabase
           .from('tasks')
           .select('*')
+          .eq('user_id', user?.id)
           .order('due_date', { ascending: true })
           .limit(5);
         
@@ -70,8 +75,10 @@ const UpcomingTasks = () => {
       }
     };
     
-    fetchTasks();
-  }, []);
+    if (user) {
+      fetchTasks();
+    }
+  }, [user]);
 
   const getPriorityBadgeClass = (priority: UpcomingTask['priority']) => {
     switch (priority) {

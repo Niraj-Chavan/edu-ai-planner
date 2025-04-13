@@ -1,9 +1,11 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Plus, Bot } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { send, Bot } from 'lucide-react';
+import { cn } from "@/lib/utils";
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
@@ -30,8 +32,8 @@ const ChatInterface = () => {
   const [isTyping, setIsTyping] = useState(false);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  // Fetch messages on mount
   useEffect(() => {
     const fetchMessages = async () => {
       try {
@@ -74,7 +76,6 @@ const ChatInterface = () => {
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
-    // Add user message to state immediately
     const userMessage: Message = {
       id: Date.now().toString(),
       content: input,
@@ -87,7 +88,6 @@ const ChatInterface = () => {
     setIsTyping(true);
 
     try {
-      // Save user message to database
       const { data, error } = await supabase
         .from('chat_messages')
         .insert({
@@ -101,7 +101,6 @@ const ChatInterface = () => {
         console.error('Error saving message:', error);
       }
       
-      // Replace temporary message with the one from the database if we got a response
       if (data) {
         const savedUserMessage: Message = {
           id: data.id,
@@ -118,12 +117,10 @@ const ChatInterface = () => {
       console.error('Failed to save message:', error);
     }
 
-    // Simulate AI response
     setTimeout(async () => {
       const aiResponse = generateAIResponse(input);
       
       try {
-        // Save AI message to database
         const { data, error } = await supabase
           .from('chat_messages')
           .insert({
@@ -137,7 +134,6 @@ const ChatInterface = () => {
           console.error('Error saving AI message:', error);
         }
         
-        // Add AI message from database response or fallback to local if DB fails
         if (data) {
           const aiMessage: Message = {
             id: data.id,
@@ -148,7 +144,6 @@ const ChatInterface = () => {
           
           setMessages(prev => [...prev, aiMessage]);
         } else {
-          // Fallback to local AI message if database failed
           setMessages(prev => [...prev, {
             id: (Date.now() + 1).toString(),
             content: aiResponse,
@@ -158,7 +153,6 @@ const ChatInterface = () => {
         }
       } catch (error) {
         console.error('Failed to save AI message:', error);
-        // Fallback for any error
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           content: aiResponse,
@@ -169,7 +163,6 @@ const ChatInterface = () => {
       
       setIsTyping(false);
 
-      // Show toast notification for task creation
       if (input.toLowerCase().includes('assignment') || input.toLowerCase().includes('project')) {
         toast({
           title: "Task Created",
@@ -180,7 +173,6 @@ const ChatInterface = () => {
   };
 
   const generateAIResponse = (userInput: string): string => {
-    // Simple response generation logic
     const input = userInput.toLowerCase();
     
     if (input.includes('assignment') || input.includes('project')) {

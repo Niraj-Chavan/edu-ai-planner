@@ -1,9 +1,12 @@
-import React, { useEffect } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, Clock, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface Task {
   id: string;
@@ -17,7 +20,8 @@ interface Task {
 type ScheduleItem = Database['public']['Tables']['schedule_items']['Row'];
 
 const DailySchedule = () => {
-  const [todaysTasks, setTodaysTasks] = React.useState<Task[]>([
+  const { user } = useAuth();
+  const [todaysTasks, setTodaysTasks] = useState<Task[]>([
     {
       id: '1',
       title: 'Calculus Lecture',
@@ -74,6 +78,7 @@ const DailySchedule = () => {
         const { data, error } = await supabase
           .from('schedule_items')
           .select('*')
+          .eq('user_id', user?.id)
           .order('start_time', { ascending: true });
         
         if (error) {
@@ -98,34 +103,47 @@ const DailySchedule = () => {
       }
     };
     
-    fetchSchedule();
-  }, []);
+    if (user) {
+      fetchSchedule();
+    }
+  }, [user]);
 
   const toggleTaskCompletion = async (taskId: string) => {
+    if (!user) return;
+    
+    // Find the task to update
+    const taskToUpdate = todaysTasks.find(task => task.id === taskId);
+    if (!taskToUpdate) return;
+    
+    // Optimistic update UI
     setTodaysTasks(prev => prev.map(task => 
       task.id === taskId ? { ...task, completed: !task.completed } : task
     ));
     
-    const taskToUpdate = todaysTasks.find(task => task.id === taskId);
-    if (!taskToUpdate) return;
-    
     try {
       const { error } = await supabase
         .from('schedule_items')
-        .update({ completed: !taskToUpdate.completed })
+        .update({ 
+          completed: !taskToUpdate.completed,
+          user_id: user.id 
+        })
         .eq('id', taskId);
         
       if (error) {
         console.error('Error updating task completion:', error);
+        // Revert the UI state if there was an error
         setTodaysTasks(prev => prev.map(task => 
           task.id === taskId ? { ...task, completed: taskToUpdate.completed } : task
         ));
+        toast.error("Couldn't update task status");
       }
     } catch (error) {
       console.error('Failed to update task completion:', error);
+      // Revert the UI state if there was an error
       setTodaysTasks(prev => prev.map(task => 
         task.id === taskId ? { ...task, completed: taskToUpdate.completed } : task
       ));
+      toast.error("Couldn't update task status");
     }
   };
 
