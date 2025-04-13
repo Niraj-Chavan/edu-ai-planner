@@ -1,8 +1,11 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Video, FileText, Book, ExternalLink } from 'lucide-react';
+import { Video, FileText, Book, ExternalLink, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from "@/components/ui/button";
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Resource {
   id: string;
@@ -13,36 +16,157 @@ interface Resource {
 }
 
 const ResourceSuggestions = () => {
-  const [resources, setResources] = React.useState<Resource[]>([
-    {
-      id: '1',
-      title: 'Advanced Calculus Explained Simply',
-      type: 'video',
-      url: '#',
-      relevance: 95
-    },
-    {
-      id: '2',
-      title: 'Understanding Neural Networks',
-      type: 'article',
-      url: '#',
-      relevance: 87
-    },
-    {
-      id: '3',
-      title: 'Physics Fundamentals: Chapter 7 Notes',
-      type: 'pdf',
-      url: '#',
-      relevance: 82
-    },
-    {
-      id: '4',
-      title: 'Data Structures and Algorithms',
-      type: 'book',
-      url: '#',
-      relevance: 75
+  const { user } = useAuth();
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const fetchResources = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      // Get user's active courses/subjects
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select('course')
+        .eq('user_id', user.id)
+        .eq('completed', false);
+      
+      if (tasksError) {
+        console.error('Error fetching tasks:', tasksError);
+      }
+      
+      const courses = tasksData 
+        ? [...new Set(tasksData.map(task => task.course || 'General'))]
+        : ['General'];
+      
+      // In a real app, you would fetch resources from an API or database
+      // based on these courses. For demo, we'll generate them.
+      const generatedResources = generateResourcesForCourses(courses);
+      setResources(generatedResources);
+    } catch (error) {
+      console.error('Failed to fetch resources:', error);
+      // Fallback to demo data
+      setResources(getDemoResources());
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+  
+  useEffect(() => {
+    fetchResources();
+  }, [user]);
+  
+  const refreshResources = async () => {
+    setRefreshing(true);
+    await fetchResources();
+    setRefreshing(false);
+  };
+  
+  const generateResourcesForCourses = (courses: string[]): Resource[] => {
+    const allResources: Resource[] = [];
+    
+    // Resource templates by subject area
+    const resourceTemplates = {
+      Math: [
+        { title: 'Calculus Made Easy', type: 'video', url: 'https://example.com/calculus' },
+        { title: 'Advanced Algebra Techniques', type: 'pdf', url: 'https://example.com/algebra' },
+        { title: 'Statistics for Data Science', type: 'article', url: 'https://example.com/stats' }
+      ],
+      Science: [
+        { title: 'Physics Fundamentals', type: 'video', url: 'https://example.com/physics' },
+        { title: 'Chemistry Lab Preparation', type: 'pdf', url: 'https://example.com/chemistry' },
+        { title: 'Biology Study Guide', type: 'book', url: 'https://example.com/biology' }
+      ],
+      Computer: [
+        { title: 'Introduction to Algorithms', type: 'book', url: 'https://example.com/algorithms' },
+        { title: 'Web Development Bootcamp', type: 'video', url: 'https://example.com/webdev' },
+        { title: 'Machine Learning Foundations', type: 'article', url: 'https://example.com/ml' }
+      ],
+      History: [
+        { title: 'World War II Documentary', type: 'video', url: 'https://example.com/ww2' },
+        { title: 'Ancient Civilizations', type: 'book', url: 'https://example.com/ancient' },
+        { title: 'American History Timeline', type: 'pdf', url: 'https://example.com/us-history' }
+      ],
+      English: [
+        { title: 'Essay Writing Workshop', type: 'video', url: 'https://example.com/essay' },
+        { title: 'Literature Analysis Guide', type: 'pdf', url: 'https://example.com/literature' },
+        { title: 'Grammar Masterclass', type: 'article', url: 'https://example.com/grammar' }
+      ],
+      General: [
+        { title: 'Effective Study Techniques', type: 'video', url: 'https://example.com/study' },
+        { title: 'Note-Taking Strategies', type: 'article', url: 'https://example.com/notes' },
+        { title: 'Time Management for Students', type: 'book', url: 'https://example.com/time' }
+      ]
+    };
+    
+    // Generate resources based on courses
+    for (const course of courses) {
+      // Find matching template category
+      const templateKey = Object.keys(resourceTemplates).find(key => 
+        course.toLowerCase().includes(key.toLowerCase())
+      ) || 'General';
+      
+      // Get resource templates
+      const templates = resourceTemplates[templateKey as keyof typeof resourceTemplates];
+      
+      // Add resources with random relevance scores
+      for (const template of templates) {
+        // Create a custom title that includes the course name if not General
+        let title = template.title;
+        if (templateKey === 'General' && course !== 'General') {
+          title = `${course}: ${title}`;
+        }
+        
+        allResources.push({
+          id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          title,
+          type: template.type as Resource['type'],
+          url: template.url,
+          relevance: Math.floor(Math.random() * 25) + 75 // 75-99% relevance
+        });
+      }
+    }
+    
+    // Sort by relevance and limit to top 5
+    return allResources
+      .sort((a, b) => b.relevance - a.relevance)
+      .slice(0, 5);
+  };
+  
+  const getDemoResources = (): Resource[] => {
+    return [
+      {
+        id: '1',
+        title: 'Advanced Calculus Explained Simply',
+        type: 'video',
+        url: 'https://example.com/calculus',
+        relevance: 95
+      },
+      {
+        id: '2',
+        title: 'Understanding Neural Networks',
+        type: 'article',
+        url: 'https://example.com/neural-networks',
+        relevance: 87
+      },
+      {
+        id: '3',
+        title: 'Physics Fundamentals: Chapter 7 Notes',
+        type: 'pdf',
+        url: 'https://example.com/physics-ch7',
+        relevance: 82
+      },
+      {
+        id: '4',
+        title: 'Data Structures and Algorithms',
+        type: 'book',
+        url: 'https://example.com/dsa',
+        relevance: 75
+      }
+    ];
+  };
 
   const getResourceIcon = (type: Resource['type']) => {
     switch (type) {
@@ -58,61 +182,87 @@ const ResourceSuggestions = () => {
   };
 
   const getRelevanceColor = (relevance: number) => {
-    if (relevance >= 90) return 'text-green-600';
-    if (relevance >= 80) return 'text-blue-600';
-    if (relevance >= 70) return 'text-amber-600';
-    return 'text-gray-600';
+    if (relevance >= 90) return 'text-green-600 dark:text-green-400';
+    if (relevance >= 80) return 'text-blue-600 dark:text-blue-400';
+    if (relevance >= 70) return 'text-amber-600 dark:text-amber-400';
+    return 'text-gray-600 dark:text-gray-400';
   };
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle>Study Resources</CardTitle>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={refreshResources} 
+          disabled={refreshing || loading}
+          className="h-8 w-8 p-0"
+        >
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+          <span className="sr-only">Refresh</span>
+        </Button>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {resources.map((resource) => (
-            <div 
-              key={resource.id}
-              className="p-3 border border-border rounded-md hover:bg-secondary/20 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center",
-                  resource.type === 'video' && "bg-red-100 text-red-700",
-                  resource.type === 'article' && "bg-blue-100 text-blue-700",
-                  resource.type === 'book' && "bg-purple-100 text-purple-700",
-                  resource.type === 'pdf' && "bg-orange-100 text-orange-700"
-                )}>
-                  {getResourceIcon(resource.type)}
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start">
-                    <h4 className="font-medium text-sm truncate">{resource.title}</h4>
-                    <span className={cn(
-                      "ml-2 text-xs font-semibold",
-                      getRelevanceColor(resource.relevance)
-                    )}>
-                      {resource.relevance}%
-                    </span>
+        {loading ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : resources.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <div className="mb-2 flex justify-center">
+              <Book className="h-12 w-12 opacity-20" />
+            </div>
+            <p>No resources found</p>
+            <p className="text-xs mt-1">Add some courses to get personalized resources</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {resources.map((resource) => (
+              <div 
+                key={resource.id}
+                className="p-3 border border-border rounded-md hover:bg-secondary/20 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center",
+                    resource.type === 'video' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                    resource.type === 'article' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                    resource.type === 'book' && "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+                    resource.type === 'pdf' && "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                  )}>
+                    {getResourceIcon(resource.type)}
                   </div>
-                  <div className="flex items-center mt-1">
-                    <span className="text-xs capitalize text-muted-foreground">
-                      {resource.type}
-                    </span>
-                    <a 
-                      href={resource.url} 
-                      className="ml-auto text-xs text-accent flex items-center gap-1 hover:underline"
-                    >
-                      Open <ExternalLink className="h-3 w-3" />
-                    </a>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-medium text-sm truncate">{resource.title}</h4>
+                      <span className={cn(
+                        "ml-2 text-xs font-semibold",
+                        getRelevanceColor(resource.relevance)
+                      )}>
+                        {resource.relevance}%
+                      </span>
+                    </div>
+                    <div className="flex items-center mt-1">
+                      <span className="text-xs capitalize text-muted-foreground">
+                        {resource.type}
+                      </span>
+                      <a 
+                        href={resource.url} 
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto text-xs text-accent flex items-center gap-1 hover:underline"
+                      >
+                        Open <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

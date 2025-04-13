@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send, Bot, Plus, Mic, StopCircle } from 'lucide-react';
+import { Send, Bot, Plus, Mic, StopCircle, Coffee, Drop, Timer } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -20,6 +20,14 @@ interface Message {
 
 type ChatMessage = Database['public']['Tables']['chat_messages']['Row'];
 
+interface BreakPreference {
+  workDuration: number; // in minutes
+  breakDuration: number; // in minutes
+  remindToDrinkWater: boolean;
+  remindToStretch: boolean;
+  remindToRestEyes: boolean;
+}
+
 const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -32,6 +40,16 @@ const ChatInterface = () => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [breakPreferences, setBreakPreferences] = useState<BreakPreference>({
+    workDuration: 90, // default 90 minutes
+    breakDuration: 15, // default 15 minutes
+    remindToDrinkWater: true,
+    remindToStretch: true,
+    remindToRestEyes: true
+  });
+  const [showBreakModal, setShowBreakModal] = useState(false);
+  const [breakTimer, setBreakTimer] = useState<NodeJS.Timeout | null>(null);
+  
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -68,7 +86,112 @@ const ChatInterface = () => {
     };
     
     fetchMessages();
+
+    // Load user break preferences if they exist
+    const loadBreakPreferences = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('user_preferences')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (error && error.code !== 'PGSQL_ERROR') {
+          console.error('Error fetching preferences:', error);
+          return;
+        }
+        
+        if (data && data.break_preferences) {
+          setBreakPreferences(data.break_preferences);
+          
+          // Start break timer
+          startBreakTimer(data.break_preferences.workDuration);
+        }
+      } catch (error) {
+        console.error('Failed to fetch preferences:', error);
+      }
+    };
+    
+    loadBreakPreferences();
+
+    return () => {
+      if (breakTimer) {
+        clearTimeout(breakTimer);
+      }
+    };
   }, [user]);
+
+  const startBreakTimer = (minutes: number) => {
+    // Clear any existing timer
+    if (breakTimer) {
+      clearTimeout(breakTimer);
+    }
+    
+    // Set new timer
+    const newTimer = setTimeout(() => {
+      toast.success(
+        <div className="flex flex-col">
+          <div className="font-bold">Time for a break!</div>
+          <div className="text-sm">Take {breakPreferences.breakDuration} minutes to rest.</div>
+          {breakPreferences.remindToDrinkWater && 
+            <div className="flex items-center mt-1 text-sm">
+              <Drop className="h-4 w-4 mr-1" /> Remember to drink water
+            </div>
+          }
+          {breakPreferences.remindToStretch && 
+            <div className="flex items-center mt-1 text-sm">
+              <Coffee className="h-4 w-4 mr-1" /> Stretch your body
+            </div>
+          }
+        </div>, 
+        {
+          duration: 10000,
+          action: {
+            label: "Dismiss",
+            onClick: () => {}
+          }
+        }
+      );
+      
+      // After the break, restart the timer
+      setTimeout(() => {
+        toast.success("Break time is over. Back to work!");
+        startBreakTimer(minutes);
+      }, breakPreferences.breakDuration * 60 * 1000);
+      
+    }, minutes * 60 * 1000);
+    
+    setBreakTimer(newTimer);
+  };
+
+  const saveBreakPreferences = async (prefs: BreakPreference) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          break_preferences: prefs,
+          updated_at: new Date().toISOString()
+        });
+        
+      if (error) {
+        console.error('Error saving preferences:', error);
+        toast.error("Failed to save break preferences");
+        return;
+      }
+      
+      setBreakPreferences(prefs);
+      startBreakTimer(prefs.workDuration);
+      toast.success("Break preferences saved");
+    } catch (error) {
+      console.error('Failed to save preferences:', error);
+      toast.error("Failed to save break preferences");
+    }
+  };
 
   const scrollToBottom = () => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -175,8 +298,38 @@ const ChatInterface = () => {
   const processUserInput = async (userInput: string): Promise<string> => {
     const input = userInput.toLowerCase();
     
-    // Improved AI understanding with more flexible keyword recognition
-    // Task Management
+    // Break preferences setup
+    if (containsAny(input, ['break', 'rest', 'pause']) &&
+        containsAny(input, ['set', 'configure', 'change', 'prefer', 'settings'])) {
+      
+      setTimeout(() => setShowBreakModal(true), 500);
+      
+      return "I can help you configure your break preferences. How long would you like to work before taking breaks? And how long should your breaks be?";
+    }
+    
+    // Work schedule optimization
+    if (containsAny(input, ['when', 'best time', 'optimal', 'suggest', 'recommend']) &&
+        containsAny(input, ['work', 'study', 'focus', 'productive'])) {
+      
+      // Get current hour
+      const currentHour = new Date().getHours();
+      let suggestion = "";
+      
+      // Productivity recommendations based on time of day
+      if (currentHour >= 8 && currentHour < 11) {
+        suggestion = "Based on your past activity and research on productivity patterns, morning hours (8-11 AM) are your most productive time. I recommend tackling your most challenging tasks now while your mind is fresh.";
+      } else if (currentHour >= 15 && currentHour < 18) {
+        suggestion = "Research shows that there's a secondary productivity peak in the late afternoon (3-6 PM). This would be a good time for moderately difficult tasks that require focus.";
+      } else if (currentHour >= 20) {
+        suggestion = "Evening hours are typically better for creative tasks and review rather than learning new complex material. Consider using this time for light reading, organizing notes, or planning for tomorrow.";
+      } else {
+        suggestion = "Based on general productivity research, most people experience productivity peaks in the morning (8-11 AM) and late afternoon (3-6 PM). The post-lunch period (1-3 PM) often sees a natural dip in alertness.";
+      }
+      
+      return `${suggestion}\n\nWould you like me to help schedule specific work blocks in your calendar based on these optimal times?`;
+    }
+    
+    // Improved Task Management
     if (containsAny(input, ['add', 'create', 'set', 'new', 'make', 'schedule', 'put']) &&
         containsAny(input, ['assignment', 'project', 'task', 'homework', 'essay', 'report', 'presentation'])) {
       
@@ -185,13 +338,17 @@ const ChatInterface = () => {
       
       if (taskResult.success) {
         toast.success("Task added to your schedule");
-        return `I've added "${taskDetails.title}" to your task list with a due date of ${formatDate(new Date(taskDetails.dueDate))}. It has been set as ${taskDetails.priority} priority. Would you like me to help you schedule time to work on this?`;
+        
+        // Add intelligent scheduling suggestions
+        const suggestedTime = getSuggestedTimeForTask(taskDetails);
+        
+        return `I've added "${taskDetails.title}" to your task list with a due date of ${formatDate(new Date(taskDetails.dueDate))}. It has been set as ${taskDetails.priority} priority.\n\n${suggestedTime}\n\nWould you like me to help you schedule focused work sessions for this task?`;
       } else {
         return "I couldn't add your task. Please try again with more details like the title, due date and priority.";
       }
     }
     
-    // Schedule Planning
+    // Schedule Planning with improved suggestions
     if (containsAny(input, ['schedule', 'plan', 'time', 'block', 'allocate', 'book', 'reserve']) && 
         containsAny(input, ['study', 'class', 'lecture', 'meeting', 'session', 'work'])) {
       
@@ -200,34 +357,171 @@ const ChatInterface = () => {
       
       if (scheduleResult.success) {
         toast.success("Added to your schedule");
-        return `I've scheduled "${scheduleDetails.title}" from ${scheduleDetails.startTime} to ${scheduleDetails.endTime}. Would you like a reminder before it starts?`;
+        
+        // Generate focused sessions with breaks
+        const focusedSessions = generateFocusedSessions(scheduleDetails);
+        
+        return `I've scheduled "${scheduleDetails.title}" from ${scheduleDetails.startTime} to ${scheduleDetails.endTime}.\n\n${focusedSessions}\n\nWould you like me to set reminders for these sessions?`;
       } else {
         return "I couldn't add this to your schedule. Please try again with more details like the activity, start time and end time.";
       }
     }
     
-    // Exam Guidance
-    if (containsAny(input, ['exam', 'test', 'quiz', 'final', 'midterm', 'assessment'])) {
-      return "I see you're concerned about an upcoming exam. I recommend creating a study plan. Would you like me to create a study schedule leading up to your exam? Please let me know the date of your exam and what subject it's for.";
+    // Resource recommendations with improved context awareness
+    if (containsAny(input, ['find', 'suggest', 'recommend', 'resource', 'material', 'study', 'learn'])) {
+      const subject = extractSubject(input);
+      
+      if (subject) {
+        return `I see you're interested in learning about ${subject}. Based on your learning history and goals, here are some recommended resources:\n\n1. ${generateResourceRecommendation(subject, 'video')}\n2. ${generateResourceRecommendation(subject, 'article')}\n3. ${generateResourceRecommendation(subject, 'book')}\n\nWould you like me to add study sessions for this topic to your schedule?`;
+      }
     }
-    
-    // Wellness Check
-    if (containsAny(input, ['tired', 'stress', 'exhausted', 'overwhelmed', 'anxious', 'worried', 'confused'])) {
-      return "I notice you might be feeling overwhelmed. Remember to take breaks! Research shows that short 10-minute breaks every hour can improve productivity by 30%. Should I schedule some break reminders for you?";
-    }
-    
-    // Deadline Management
+
+    // Default responses for common queries
     if (containsAny(input, ['deadline', 'due', 'when', 'late', 'time left', 'running out of time'])) {
-      return "I can help you manage your deadlines. Would you like me to show you your upcoming deadlines, or help you prioritize your tasks based on due dates?";
+      return "I can help you manage your deadlines. Would you like me to show you your upcoming deadlines, or help you prioritize your tasks based on due dates and estimated completion time?";
     }
-    
-    // Calendar View
+
     if (containsAny(input, ['calendar', 'view', 'see', 'show', 'check', 'look at'])) {
-      return "If you'd like to see your full schedule, you can navigate to the Planner page. Would you like me to help you organize specific days in your calendar?";
+      return "If you'd like to see your full schedule, you can navigate to the Planner page. Would you like me to help you organize specific days in your calendar based on your productivity patterns and task priorities?";
     }
     
     // General Help
-    return "I'm here to help organize your academic schedule. You can ask me to add tasks, schedule study time, or plan your week. For example, try saying 'Add a Math assignment due Friday' or 'Schedule a study session today from 3pm to 5pm'.";
+    return "I'm here to help organize your academic schedule and optimize your productivity. You can ask me to add tasks, schedule study sessions with optimal break intervals, or suggest when to work on specific subjects based on your productivity patterns. For example, try saying 'When is the best time to study math?' or 'Schedule a focused study session for tomorrow'.";
+  };
+
+  const getSuggestedTimeForTask = (taskDetails: any): string => {
+    // Get current date info
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+    const currentHour = now.getHours();
+    
+    // Determine best days/times based on task type and priority
+    let suggestion = "";
+    
+    if (taskDetails.priority === 'high') {
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Weekday
+        suggestion = "For high priority tasks like this, research shows that mornings (8-11 AM) are optimal for focused work. I suggest scheduling 2-3 focused sessions with breaks in between, starting tomorrow morning.";
+      } else { // Weekend
+        suggestion = "Since today is a weekend, I recommend starting this high priority task soon. Research shows that 10 AM - 12 PM is a productive weekend time slot when you're still fresh.";
+      }
+    } else if (taskDetails.priority === 'medium') {
+      suggestion = "For medium priority tasks, mid-afternoon sessions (2-5 PM) when you've had time to build momentum are effective. Consider scheduling 45-minute focus blocks with 15-minute breaks.";
+    } else { // low priority
+      suggestion = "Low priority tasks are perfect for your energy dips, typically after lunch (1-2 PM) or later in the evening. This helps you maintain productivity throughout the day.";
+    }
+    
+    return suggestion;
+  };
+
+  const generateFocusedSessions = (scheduleDetails: any): string => {
+    // Calculate total duration in minutes
+    const startParts = scheduleDetails.startTime.split(':').map(Number);
+    const endParts = scheduleDetails.endTime.split(':').map(Number);
+    
+    const startMinutes = startParts[0] * 60 + startParts[1];
+    const endMinutes = endParts[0] * 60 + endParts[1];
+    const totalDuration = endMinutes - startMinutes;
+    
+    // If shorter than break interval, no breaks needed
+    if (totalDuration <= breakPreferences.workDuration) {
+      return `This session is shorter than your preferred work duration (${breakPreferences.workDuration} minutes), so no breaks are scheduled.`;
+    }
+    
+    // Calculate number of breaks needed
+    const numberOfBreaks = Math.floor(totalDuration / breakPreferences.workDuration);
+    
+    if (numberOfBreaks === 0) {
+      return "";
+    }
+    
+    // Generate break schedule
+    let breakSchedule = "I've optimized your session with these recommended breaks:\n\n";
+    let currentMinutes = startMinutes;
+    
+    for (let i = 0; i < numberOfBreaks; i++) {
+      currentMinutes += breakPreferences.workDuration;
+      
+      const breakHour = Math.floor(currentMinutes / 60);
+      const breakMinute = currentMinutes % 60;
+      const formattedHour = breakHour % 12 || 12;
+      const amPm = breakHour < 12 ? 'AM' : 'PM';
+      
+      breakSchedule += `• Break at ${formattedHour}:${breakMinute.toString().padStart(2, '0')} ${amPm}: `;
+      
+      if (breakPreferences.remindToDrinkWater) {
+        breakSchedule += "Drink water, ";
+      }
+      
+      if (breakPreferences.remindToStretch) {
+        breakSchedule += "stretch, ";
+      }
+      
+      if (breakPreferences.remindToRestEyes) {
+        breakSchedule += "rest your eyes, ";
+      }
+      
+      breakSchedule = breakSchedule.slice(0, -2) + "\n"; // Remove trailing comma
+      
+      // Add break duration to current time
+      currentMinutes += breakPreferences.breakDuration;
+    }
+    
+    return breakSchedule;
+  };
+  
+  const extractSubject = (input: string): string | null => {
+    const commonSubjects = [
+      'math', 'algebra', 'calculus', 'statistics', 'geometry', 'trigonometry',
+      'physics', 'chemistry', 'biology', 'anatomy', 'ecology', 'geology',
+      'history', 'geography', 'economics', 'sociology', 'psychology', 'philosophy',
+      'english', 'literature', 'writing', 'grammar', 'poetry', 'shakespeare',
+      'computer science', 'programming', 'coding', 'data structures', 'algorithms',
+      'music', 'art', 'photography', 'design', 'architecture',
+      'foreign language', 'spanish', 'french', 'german', 'chinese', 'japanese'
+    ];
+    
+    for (const subject of commonSubjects) {
+      if (input.toLowerCase().includes(subject)) {
+        return subject.charAt(0).toUpperCase() + subject.slice(1);
+      }
+    }
+    
+    return null;
+  };
+  
+  const generateResourceRecommendation = (subject: string, type: 'video' | 'article' | 'book'): string => {
+    // In a real app, this would connect to a recommendation engine or database
+    const resources = {
+      math: {
+        video: 'Khan Academy\'s "Calculus Essentials" - An excellent visual explanation of key concepts with practice problems',
+        article: 'MIT OpenCourseWare\'s "Mathematics for Computer Science" - Comprehensive coverage with practical examples',
+        book: '"How to Solve It" by George Pólya - A classic guide to mathematical problem-solving strategies'
+      },
+      physics: {
+        video: 'Professor Walter Lewin\'s MIT Physics lectures - Known for clear demonstrations of complex concepts',
+        article: 'PhysicsWorld\'s "Quantum Mechanics Made Simple" - A digestible introduction to quantum concepts',
+        book: '"Six Easy Pieces" by Richard Feynman - Fundamental physics concepts explained in accessible language'
+      },
+      history: {
+        video: 'Crash Course World History series - Engaging overview of major historical events and their connections',
+        article: 'Smithsonian Magazine\'s "Turning Points in History" collection - In-depth analysis of pivotal moments',
+        book: '"Sapiens" by Yuval Noah Harari - A thought-provoking perspective on human history'
+      },
+      programming: {
+        video: 'CS50 Harvard Computer Science course - Comprehensive introduction to computer science fundamentals',
+        article: 'dev.to\'s "Data Structures Explained" series - Visual explanations of essential programming concepts',
+        book: '"Clean Code" by Robert C. Martin - Industry-standard practices for writing maintainable code'
+      },
+      default: {
+        video: `Top-rated ${subject} course on educational platforms`,
+        article: `Comprehensive ${subject} guide from academic journals`,
+        book: `Best-selling ${subject} textbook with practical examples`
+      }
+    };
+    
+    // Get resources for the specific subject or use default
+    const subjectResources = resources[subject.toLowerCase() as keyof typeof resources] || resources.default;
+    return subjectResources[type];
   };
 
   const containsAny = (text: string, keywords: string[]): boolean => {
@@ -640,8 +934,94 @@ const ChatInterface = () => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Simple break preferences modal
+  const BreakPreferencesModal = () => {
+    const [tempPrefs, setTempPrefs] = useState(breakPreferences);
+    
+    const handleSave = () => {
+      saveBreakPreferences(tempPrefs);
+      setShowBreakModal(false);
+    };
+    
+    return (
+      <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 ${showBreakModal ? 'block' : 'hidden'}`}>
+        <div className="bg-background rounded-lg p-6 w-full max-w-md">
+          <h3 className="text-lg font-bold mb-4">Break Preferences</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Work Duration (minutes)
+                <input 
+                  type="number" 
+                  value={tempPrefs.workDuration}
+                  onChange={(e) => setTempPrefs({...tempPrefs, workDuration: Number(e.target.value) || 30})}
+                  className="mt-1 block w-full rounded-md border-border px-3 py-2 bg-background"
+                  min="15"
+                  max="180"
+                />
+              </label>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Break Duration (minutes)
+                <input 
+                  type="number" 
+                  value={tempPrefs.breakDuration}
+                  onChange={(e) => setTempPrefs({...tempPrefs, breakDuration: Number(e.target.value) || 5})}
+                  className="mt-1 block w-full rounded-md border-border px-3 py-2 bg-background"
+                  min="5"
+                  max="60"
+                />
+              </label>
+            </div>
+            
+            <div className="flex items-center">
+              <input 
+                type="checkbox" 
+                id="drinkWater"
+                checked={tempPrefs.remindToDrinkWater}
+                onChange={(e) => setTempPrefs({...tempPrefs, remindToDrinkWater: e.target.checked})}
+                className="mr-2"
+              />
+              <label htmlFor="drinkWater" className="text-sm">Remind me to drink water</label>
+            </div>
+            
+            <div className="flex items-center">
+              <input 
+                type="checkbox" 
+                id="stretch"
+                checked={tempPrefs.remindToStretch}
+                onChange={(e) => setTempPrefs({...tempPrefs, remindToStretch: e.target.checked})}
+                className="mr-2"
+              />
+              <label htmlFor="stretch" className="text-sm">Remind me to stretch</label>
+            </div>
+            
+            <div className="flex items-center">
+              <input 
+                type="checkbox" 
+                id="restEyes"
+                checked={tempPrefs.remindToRestEyes}
+                onChange={(e) => setTempPrefs({...tempPrefs, remindToRestEyes: e.target.checked})}
+                className="mr-2"
+              />
+              <label htmlFor="restEyes" className="text-sm">Remind me to rest my eyes</label>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="outline" onClick={() => setShowBreakModal(false)}>Cancel</Button>
+            <Button onClick={handleSave}>Save Preferences</Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-150px)] border border-border rounded-lg overflow-hidden bg-white">
+    <div className="flex flex-col h-[calc(100vh-150px)] border border-border rounded-lg overflow-hidden bg-card">
       <div className="p-4 border-b border-border bg-secondary/50">
         <h2 className="font-bold flex items-center gap-2">
           <Bot className="h-5 w-5 text-accent" />
@@ -656,11 +1036,11 @@ const ChatInterface = () => {
             className={cn(
               "mb-4 max-w-[80%] rounded-lg p-3",
               message.sender === 'user' 
-                ? "bg-accent text-white ml-auto" 
-                : "bg-secondary mr-auto"
+                ? "bg-[hsl(var(--chat-user-message-bg))] text-[hsl(var(--chat-user-message-text))] ml-auto" 
+                : "bg-[hsl(var(--chat-ai-message-bg))] text-[hsl(var(--chat-ai-message-text))] mr-auto"
             )}
           >
-            <p className="text-sm">{message.content}</p>
+            <p className="text-sm whitespace-pre-line">{message.content}</p>
             <span className="text-xs opacity-70 mt-1 block text-right">
               {getTimeString(message.timestamp)}
             </span>
@@ -668,7 +1048,7 @@ const ChatInterface = () => {
         ))}
         
         {isTyping && (
-          <div className="mb-4 max-w-[80%] rounded-lg p-3 bg-secondary mr-auto">
+          <div className="mb-4 max-w-[80%] rounded-lg p-3 bg-[hsl(var(--chat-ai-message-bg))] text-[hsl(var(--chat-ai-message-text))] mr-auto">
             <div className="flex gap-1">
               <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light"></div>
               <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light delay-150"></div>
@@ -690,6 +1070,14 @@ const ChatInterface = () => {
           >
             {isListening ? <StopCircle className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setShowBreakModal(true)}
+            title="Configure break reminders"
+          >
+            <Timer className="h-4 w-4" />
+          </Button>
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -702,6 +1090,8 @@ const ChatInterface = () => {
           </Button>
         </div>
       </div>
+      
+      {showBreakModal && <BreakPreferencesModal />}
     </div>
   );
 };
