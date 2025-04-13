@@ -9,6 +9,10 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import Planner from "./pages/Planner";
+import Progress from "./pages/Progress";
+import Study from "./pages/Study";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -26,7 +30,26 @@ const App = () => (
                 <Index />
               </ProtectedRoute>
             } />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="/planner" element={
+              <ProtectedRoute>
+                <Planner />
+              </ProtectedRoute>
+            } />
+            <Route path="/progress" element={
+              <ProtectedRoute>
+                <Progress />
+              </ProtectedRoute>
+            } />
+            <Route path="/study" element={
+              <ProtectedRoute>
+                <Study />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

@@ -3,16 +3,18 @@ import React from 'react';
 import { CalendarDays, BookOpen, BarChart2, MessageSquare, Settings, Brain } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { cn } from '@/lib/utils';
+import { Link, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
   const [collapsed, setCollapsed] = React.useState(false);
+  const location = useLocation();
   
   const navItems = [
-    { icon: MessageSquare, label: 'Chat', active: true },
-    { icon: CalendarDays, label: 'Planner', active: false },
-    { icon: BarChart2, label: 'Progress', active: false },
-    { icon: BookOpen, label: 'Study', active: false },
-    { icon: Settings, label: 'Settings', active: false },
+    { icon: MessageSquare, label: 'Chat', path: '/' },
+    { icon: CalendarDays, label: 'Planner', path: '/planner' },
+    { icon: BarChart2, label: 'Progress', path: '/progress' },
+    { icon: BookOpen, label: 'Study', path: '/study' },
+    { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
   return (
@@ -39,20 +41,27 @@ const Sidebar = () => {
 
       <nav className="flex-1 py-6">
         <ul className="space-y-2 px-2">
-          {navItems.map((item, index) => (
-            <li key={index}>
-              <Button
-                variant={item.active ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start gap-3",
-                  collapsed ? "justify-center px-2" : "px-3"
-                )}
-              >
-                <item.icon className={cn("h-5 w-5", item.active && "text-accent")} />
-                {!collapsed && <span>{item.label}</span>}
-              </Button>
-            </li>
-          ))}
+          {navItems.map((item, index) => {
+            const isActive = location.pathname === item.path;
+            
+            return (
+              <li key={index}>
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start gap-3",
+                    collapsed ? "justify-center px-2" : "px-3"
+                  )}
+                  asChild
+                >
+                  <Link to={item.path}>
+                    <item.icon className={cn("h-5 w-5", isActive && "text-accent")} />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 
