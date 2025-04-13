@@ -3,14 +3,14 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import UserMenu from '../auth/UserMenu';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface AppHeaderProps {
   toggleSidebar: () => void;
 }
 
 const AppHeader = ({ toggleSidebar }: AppHeaderProps) => {
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
 
   return (
     <header className="border-b sticky top-0 z-30 bg-background">
