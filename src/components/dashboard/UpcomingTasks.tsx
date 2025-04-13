@@ -1,8 +1,9 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardList, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 
 interface UpcomingTask {
   id: string;
@@ -12,8 +13,10 @@ interface UpcomingTask {
   course: string;
 }
 
+type Task = Database['public']['Tables']['tasks']['Row'];
+
 const UpcomingTasks = () => {
-  const tasks: UpcomingTask[] = [
+  const [tasks, setTasks] = useState<UpcomingTask[]>([
     {
       id: '1',
       title: 'Physics Lab Report',
@@ -35,7 +38,40 @@ const UpcomingTasks = () => {
       priority: 'high',
       course: 'CS450'
     }
-  ];
+  ]);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('due_date', { ascending: true })
+          .limit(5);
+        
+        if (error) {
+          console.error('Error fetching tasks:', error);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          const formattedTasks: UpcomingTask[] = data.map((task: Task) => ({
+            id: task.id,
+            title: task.title,
+            dueDate: task.due_date || new Date().toISOString(),
+            priority: (task.priority as 'high' | 'medium' | 'low') || 'medium',
+            course: task.course || 'N/A'
+          }));
+          
+          setTasks(formattedTasks);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tasks:', error);
+      }
+    };
+    
+    fetchTasks();
+  }, []);
 
   const getPriorityBadgeClass = (priority: UpcomingTask['priority']) => {
     switch (priority) {

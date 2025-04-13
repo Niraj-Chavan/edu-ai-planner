@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Send, Plus, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 
 interface Message {
   id: string;
@@ -12,6 +14,8 @@ interface Message {
   sender: 'user' | 'ai';
   timestamp: Date;
 }
+
+type ChatMessage = Database['public']['Tables']['chat_messages']['Row'];
 
 const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([
@@ -27,6 +31,38 @@ const ChatInterface = () => {
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
+  // Fetch messages on mount
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .order('timestamp', { ascending: true });
+        
+        if (error) {
+          console.error('Error fetching messages:', error);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          const formattedMessages: Message[] = data.map((msg: ChatMessage) => ({
+            id: msg.id,
+            content: msg.content,
+            sender: msg.sender as 'user' | 'ai',
+            timestamp: new Date(msg.timestamp || ''),
+          }));
+          
+          setMessages(formattedMessages);
+        }
+      } catch (error) {
+        console.error('Failed to fetch messages:', error);
+      }
+    };
+    
+    fetchMessages();
+  }, []);
+
   const scrollToBottom = () => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -38,7 +74,7 @@ const ChatInterface = () => {
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
-    // Add user message
+    // Add user message to state immediately
     const userMessage: Message = {
       id: Date.now().toString(),
       content: input,
@@ -50,15 +86,87 @@ const ChatInterface = () => {
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI response (In a real app, this would be an API call)
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: generateAIResponse(input),
-        sender: 'ai',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiMessage]);
+    try {
+      // Save user message to database
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          content: input,
+          sender: 'user'
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error saving message:', error);
+      }
+      
+      // Replace temporary message with the one from the database if we got a response
+      if (data) {
+        const savedUserMessage: Message = {
+          id: data.id,
+          content: data.content,
+          sender: data.sender as 'user',
+          timestamp: new Date(data.timestamp || ''),
+        };
+        
+        setMessages(prev => 
+          prev.map(msg => msg.id === userMessage.id ? savedUserMessage : msg)
+        );
+      }
+    } catch (error) {
+      console.error('Failed to save message:', error);
+    }
+
+    // Simulate AI response
+    setTimeout(async () => {
+      const aiResponse = generateAIResponse(input);
+      
+      try {
+        // Save AI message to database
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .insert({
+            content: aiResponse,
+            sender: 'ai'
+          })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('Error saving AI message:', error);
+        }
+        
+        // Add AI message from database response or fallback to local if DB fails
+        if (data) {
+          const aiMessage: Message = {
+            id: data.id,
+            content: data.content,
+            sender: data.sender as 'ai',
+            timestamp: new Date(data.timestamp || ''),
+          };
+          
+          setMessages(prev => [...prev, aiMessage]);
+        } else {
+          // Fallback to local AI message if database failed
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            content: aiResponse,
+            sender: 'ai',
+            timestamp: new Date(),
+          }]);
+        }
+      } catch (error) {
+        console.error('Failed to save AI message:', error);
+        // Fallback for any error
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          content: aiResponse,
+          sender: 'ai',
+          timestamp: new Date(),
+        }]);
+      }
+      
       setIsTyping(false);
 
       // Show toast notification for task creation

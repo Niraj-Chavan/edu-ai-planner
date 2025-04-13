@@ -1,8 +1,9 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, Clock, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 
 interface Task {
   id: string;
@@ -12,6 +13,8 @@ interface Task {
   completed: boolean;
   category: 'study' | 'class' | 'assignment' | 'break' | 'personal';
 }
+
+type ScheduleItem = Database['public']['Tables']['schedule_items']['Row'];
 
 const DailySchedule = () => {
   const [todaysTasks, setTodaysTasks] = React.useState<Task[]>([
@@ -65,6 +68,67 @@ const DailySchedule = () => {
     }
   ]);
 
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('schedule_items')
+          .select('*')
+          .order('start_time', { ascending: true });
+        
+        if (error) {
+          console.error('Error fetching schedule:', error);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          const formattedTasks: Task[] = data.map((item: ScheduleItem) => ({
+            id: item.id,
+            title: item.title,
+            startTime: item.start_time,
+            endTime: item.end_time,
+            completed: item.completed || false,
+            category: (item.category as Task['category']) || 'study'
+          }));
+          
+          setTodaysTasks(formattedTasks);
+        }
+      } catch (error) {
+        console.error('Failed to fetch schedule:', error);
+      }
+    };
+    
+    fetchSchedule();
+  }, []);
+
+  const toggleTaskCompletion = async (taskId: string) => {
+    setTodaysTasks(prev => prev.map(task => 
+      task.id === taskId ? { ...task, completed: !task.completed } : task
+    ));
+    
+    const taskToUpdate = todaysTasks.find(task => task.id === taskId);
+    if (!taskToUpdate) return;
+    
+    try {
+      const { error } = await supabase
+        .from('schedule_items')
+        .update({ completed: !taskToUpdate.completed })
+        .eq('id', taskId);
+        
+      if (error) {
+        console.error('Error updating task completion:', error);
+        setTodaysTasks(prev => prev.map(task => 
+          task.id === taskId ? { ...task, completed: taskToUpdate.completed } : task
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to update task completion:', error);
+      setTodaysTasks(prev => prev.map(task => 
+        task.id === taskId ? { ...task, completed: taskToUpdate.completed } : task
+      ));
+    }
+  };
+
   const getCategoryColor = (category: Task['category']) => {
     switch (category) {
       case 'study':
@@ -80,12 +144,6 @@ const DailySchedule = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
-  };
-
-  const toggleTaskCompletion = (taskId: string) => {
-    setTodaysTasks(prev => prev.map(task => 
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    ));
   };
 
   const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });

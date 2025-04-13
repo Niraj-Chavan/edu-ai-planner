@@ -9,7 +9,102 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      chat_messages: {
+        Row: {
+          content: string
+          id: string
+          sender: string | null
+          timestamp: string | null
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          id?: string
+          sender?: string | null
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          id?: string
+          sender?: string | null
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      schedule_items: {
+        Row: {
+          category: string | null
+          completed: boolean | null
+          created_at: string | null
+          end_time: string
+          id: string
+          start_time: string
+          title: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          completed?: boolean | null
+          created_at?: string | null
+          end_time: string
+          id?: string
+          start_time: string
+          title: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          completed?: boolean | null
+          created_at?: string | null
+          end_time?: string
+          id?: string
+          start_time?: string
+          title?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          completed: boolean | null
+          course: string | null
+          created_at: string | null
+          due_date: string | null
+          id: string
+          priority: string | null
+          title: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          completed?: boolean | null
+          course?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string | null
+          title: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          completed?: boolean | null
+          course?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
