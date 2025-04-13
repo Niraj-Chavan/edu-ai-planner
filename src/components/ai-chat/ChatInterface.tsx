@@ -580,37 +580,46 @@ const ChatInterface = () => {
       return;
     }
 
-    // Initialize speech recognition
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-US';
+    // Initialize speech recognition with proper type handling
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognitionAPI) {
+      toast.error("Speech recognition is not available");
+      return;
+    }
 
-    // Handle results
-    recognitionRef.current.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join('');
-      setInput(transcript);
-    };
+    recognitionRef.current = new SpeechRecognitionAPI();
+    
+    if (recognitionRef.current) {
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
 
-    // Handle end event
-    recognitionRef.current.onend = () => {
-      setIsListening(false);
-    };
+      // Handle results
+      recognitionRef.current.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        setInput(transcript);
+      };
 
-    // Handle errors
-    recognitionRef.current.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      toast.error("Speech recognition error: " + event.error);
-    };
+      // Handle end event
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
 
-    // Start listening
-    recognitionRef.current.start();
-    setIsListening(true);
-    toast.success("Listening...");
+      // Handle errors
+      recognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        toast.error("Speech recognition error: " + event.error);
+      };
+
+      // Start listening
+      recognitionRef.current.start();
+      setIsListening(true);
+      toast.success("Listening...");
+    }
   };
 
   const stopSpeechRecognition = () => {
