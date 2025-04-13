@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send, Bot, Plus } from 'lucide-react';
+import { Send, Bot, Plus, Mic, StopCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -30,8 +31,10 @@ const ChatInterface = () => {
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -172,24 +175,27 @@ const ChatInterface = () => {
   const processUserInput = async (userInput: string): Promise<string> => {
     const input = userInput.toLowerCase();
     
-    if ((input.includes('assignment') || input.includes('project') || input.includes('task') || input.includes('homework')) && 
-        (input.includes('add') || input.includes('create') || input.includes('set') || input.includes('new'))) {
-      const taskDetails = extractTaskDetails(userInput);
+    // Improved AI understanding with more flexible keyword recognition
+    // Task Management
+    if (containsAny(input, ['add', 'create', 'set', 'new', 'make', 'schedule', 'put']) &&
+        containsAny(input, ['assignment', 'project', 'task', 'homework', 'essay', 'report', 'presentation'])) {
       
+      const taskDetails = extractTaskDetails(userInput);
       const taskResult = await createTask(taskDetails);
       
       if (taskResult.success) {
         toast.success("Task added to your schedule");
-        return `I've added "${taskDetails.title}" to your task list with a due date of ${taskDetails.dueDate}. It has been set as ${taskDetails.priority} priority. Would you like me to help you schedule time to work on this?`;
+        return `I've added "${taskDetails.title}" to your task list with a due date of ${formatDate(new Date(taskDetails.dueDate))}. It has been set as ${taskDetails.priority} priority. Would you like me to help you schedule time to work on this?`;
       } else {
         return "I couldn't add your task. Please try again with more details like the title, due date and priority.";
       }
     }
     
-    if ((input.includes('schedule') || input.includes('plan') || input.includes('time')) && 
-        (input.includes('study') || input.includes('class') || input.includes('lecture') || input.includes('meeting'))) {
-      const scheduleDetails = extractScheduleDetails(userInput);
+    // Schedule Planning
+    if (containsAny(input, ['schedule', 'plan', 'time', 'block', 'allocate', 'book', 'reserve']) && 
+        containsAny(input, ['study', 'class', 'lecture', 'meeting', 'session', 'work'])) {
       
+      const scheduleDetails = extractScheduleDetails(userInput);
       const scheduleResult = await createScheduleItem(scheduleDetails);
       
       if (scheduleResult.success) {
@@ -200,15 +206,41 @@ const ChatInterface = () => {
       }
     }
     
-    if (input.includes('exam') || input.includes('test')) {
-      return "I see you have an upcoming exam. I recommend creating a study plan. Would you like me to create a study schedule leading up to it?";
+    // Exam Guidance
+    if (containsAny(input, ['exam', 'test', 'quiz', 'final', 'midterm', 'assessment'])) {
+      return "I see you're concerned about an upcoming exam. I recommend creating a study plan. Would you like me to create a study schedule leading up to your exam? Please let me know the date of your exam and what subject it's for.";
     }
     
-    if (input.includes('tired') || input.includes('stress')) {
+    // Wellness Check
+    if (containsAny(input, ['tired', 'stress', 'exhausted', 'overwhelmed', 'anxious', 'worried', 'confused'])) {
       return "I notice you might be feeling overwhelmed. Remember to take breaks! Research shows that short 10-minute breaks every hour can improve productivity by 30%. Should I schedule some break reminders for you?";
     }
     
+    // Deadline Management
+    if (containsAny(input, ['deadline', 'due', 'when', 'late', 'time left', 'running out of time'])) {
+      return "I can help you manage your deadlines. Would you like me to show you your upcoming deadlines, or help you prioritize your tasks based on due dates?";
+    }
+    
+    // Calendar View
+    if (containsAny(input, ['calendar', 'view', 'see', 'show', 'check', 'look at'])) {
+      return "If you'd like to see your full schedule, you can navigate to the Planner page. Would you like me to help you organize specific days in your calendar?";
+    }
+    
+    // General Help
     return "I'm here to help organize your academic schedule. You can ask me to add tasks, schedule study time, or plan your week. For example, try saying 'Add a Math assignment due Friday' or 'Schedule a study session today from 3pm to 5pm'.";
+  };
+
+  const containsAny = (text: string, keywords: string[]): boolean => {
+    return keywords.some(keyword => text.includes(keyword));
+  };
+
+  const formatDate = (date: Date): string => {
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
   };
 
   const extractTaskDetails = (input: string) => {
@@ -219,13 +251,16 @@ const ChatInterface = () => {
     
     const words = input.split(' ');
     
+    // Better course detection
     const possibleCourses = words.filter(word => 
       /^[A-Z]{2,7}\d{3}$/i.test(word) || /^[A-Z]{2,4}$/i.test(word)
     );
     if (possibleCourses.length > 0) {
       course = possibleCourses[0].toUpperCase();
     } else {
-      const subjects = ['math', 'science', 'history', 'english', 'physics', 'chemistry', 'biology', 'literature', 'computer'];
+      const subjects = ['math', 'science', 'history', 'english', 'physics', 'chemistry', 
+                        'biology', 'literature', 'computer', 'psychology', 'philosophy', 
+                        'economics', 'business', 'art', 'music', 'geography'];
       for (const subject of subjects) {
         if (input.toLowerCase().includes(subject)) {
           course = subject.charAt(0).toUpperCase() + subject.slice(1);
@@ -234,17 +269,24 @@ const ChatInterface = () => {
       }
     }
     
+    // Improved title extraction
     if (input.includes('add') && input.includes('due')) {
       const addIndex = input.indexOf('add') + 3;
       const dueIndex = input.indexOf('due');
       if (dueIndex > addIndex) {
         title = input.substring(addIndex, dueIndex).trim();
       }
-    } else if (input.includes('called') || input.includes('titled')) {
-      const keywordIndex = Math.max(input.indexOf('called'), input.indexOf('titled'));
-      if (keywordIndex !== -1) {
-        title = input.substring(keywordIndex + 6).trim();
-        const endTerms = [' due ', ' priority ', ' for course '];
+    } else if (input.includes('called') || input.includes('titled') || input.includes('named')) {
+      const keywordIndices = [
+        input.indexOf('called') !== -1 ? input.indexOf('called') + 6 : -1,
+        input.indexOf('titled') !== -1 ? input.indexOf('titled') + 6 : -1,
+        input.indexOf('named') !== -1 ? input.indexOf('named') + 5 : -1
+      ].filter(idx => idx !== -1);
+      
+      if (keywordIndices.length > 0) {
+        const keywordIndex = Math.min(...keywordIndices);
+        title = input.substring(keywordIndex).trim();
+        const endTerms = [' due ', ' priority ', ' for course ', ' by ', ' on ', ' at '];
         for (const term of endTerms) {
           if (title.includes(term)) {
             title = title.substring(0, title.indexOf(term));
@@ -254,8 +296,11 @@ const ChatInterface = () => {
     }
     
     if (title === "New Task" || title.length < 3) {
+      // Extract a more meaningful title from the input
+      const commonWords = ['add', 'create', 'new', 'task', 'assignment', 'project', 'homework', 
+                         'for', 'me', 'my', 'due', 'please', 'can', 'you', 'would', 'could'];
       const meaningful = words.filter(word => 
-        !['add', 'create', 'new', 'task', 'assignment', 'project', 'homework', 'for', 'me', 'my', 'due'].includes(word.toLowerCase())
+        !commonWords.includes(word.toLowerCase())
       );
       if (meaningful.length > 0) {
         title = meaningful.slice(0, 3).join(' ');
@@ -263,12 +308,19 @@ const ChatInterface = () => {
       }
     }
     
-    const dueText = input.substring(input.indexOf('due') + 3).trim();
+    // Enhanced due date parsing
+    const dueText = input.includes('due') ? 
+      input.substring(input.indexOf('due') + 3).trim() : 
+      input.includes('by') ? 
+        input.substring(input.indexOf('by') + 2).trim() : input;
     dueDate = parseDueDate(dueText);
     
-    if (input.includes('high priority') || input.includes('important')) {
+    // Better priority detection
+    if (input.includes('high priority') || input.includes('important') || 
+        input.includes('urgent') || input.includes('critical')) {
       priority = "high";
-    } else if (input.includes('low priority') || input.includes('not urgent')) {
+    } else if (input.includes('low priority') || input.includes('not urgent') || 
+               input.includes('not important') || input.includes('can wait')) {
       priority = "low";
     }
     
@@ -291,8 +343,21 @@ const ChatInterface = () => {
     } else if (text.includes('next week')) {
       date.setDate(date.getDate() + 7);
       return date;
+    } else if (text.includes('this weekend') || text.includes('weekend')) {
+      // Get next Saturday
+      const day = date.getDay(); // 0 is Sunday, 6 is Saturday
+      const daysUntilSaturday = day === 6 ? 0 : 6 - day;
+      date.setDate(date.getDate() + daysUntilSaturday);
+      return date;
+    } else if (text.includes('two weeks') || text.includes('2 weeks')) {
+      date.setDate(date.getDate() + 14);
+      return date;
+    } else if (text.includes('month') || text.includes('30 days')) {
+      date.setMonth(date.getMonth() + 1);
+      return date;
     }
     
+    // Day of week detection
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     for (let i = 0; i < days.length; i++) {
       if (text.toLowerCase().includes(days[i])) {
@@ -304,6 +369,7 @@ const ChatInterface = () => {
       }
     }
     
+    // Date format MM/DD
     const monthMatch = text.match(/(\d{1,2})\/(\d{1,2})/);
     if (monthMatch) {
       const month = parseInt(monthMatch[1]) - 1;
@@ -313,11 +379,13 @@ const ChatInterface = () => {
       return date;
     }
     
-    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    // Month names
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 
+                    'september', 'october', 'november', 'december'];
     for (let i = 0; i < months.length; i++) {
       if (text.toLowerCase().includes(months[i])) {
         const monthIndex = i;
-        const dayMatch = text.match(/(\d{1,2})/);
+        const dayMatch = text.match(/(\d{1,2})(st|nd|rd|th)?/);
         if (dayMatch) {
           const day = parseInt(dayMatch[0]);
           date.setMonth(monthIndex);
@@ -327,6 +395,7 @@ const ChatInterface = () => {
       }
     }
     
+    // Default fallback
     date.setDate(date.getDate() + 3);
     return date;
   };
@@ -337,24 +406,28 @@ const ChatInterface = () => {
     let endTime = "10:00";
     let category = "study";
     
-    if (input.includes('class') || input.includes('lecture')) {
+    // Improved category detection
+    if (containsAny(input, ['class', 'lecture', 'course'])) {
       title = "Class";
       category = "class";
-    } else if (input.includes('study')) {
+    } else if (containsAny(input, ['study', 'review', 'practice', 'revision'])) {
       title = "Study Session";
       category = "study";
-    } else if (input.includes('meeting')) {
+    } else if (containsAny(input, ['meeting', 'appointment', 'consultation'])) {
       title = "Meeting";
       category = "personal";
-    } else if (input.includes('break')) {
+    } else if (containsAny(input, ['break', 'rest', 'relax', 'pause'])) {
       title = "Break";
       category = "break";
-    } else if (input.includes('assignment') || input.includes('homework')) {
+    } else if (containsAny(input, ['assignment', 'homework', 'project', 'essay', 'report'])) {
       title = "Assignment Work";
       category = "assignment";
     }
     
-    const subjects = ['math', 'science', 'history', 'english', 'physics', 'chemistry', 'biology', 'literature', 'computer', 'calculus', 'algebra'];
+    // Enhanced subject detection
+    const subjects = ['math', 'science', 'history', 'english', 'physics', 'chemistry', 
+                      'biology', 'literature', 'computer', 'calculus', 'algebra', 
+                      'psychology', 'philosophy', 'economics', 'business', 'art', 'music'];
     for (const subject of subjects) {
       if (input.toLowerCase().includes(subject)) {
         title = `${subject.charAt(0).toUpperCase() + subject.slice(1)} ${category === 'class' ? 'Class' : 'Study'}`;
@@ -362,21 +435,58 @@ const ChatInterface = () => {
       }
     }
     
-    const timePattern = /from\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)\s+to\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i;
-    const timeMatch = input.match(timePattern);
+    // Improved time detection
+    const timePatterns = [
+      /from\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)\s+to\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i,
+      /between\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)\s+and\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i,
+      /(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)\s+to\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i,
+      /(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)\s*-\s*(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i
+    ];
+    
+    let timeMatch = null;
+    for (const pattern of timePatterns) {
+      const match = input.match(pattern);
+      if (match) {
+        timeMatch = match;
+        break;
+      }
+    }
     
     if (timeMatch) {
       startTime = formatTimeString(timeMatch[1]);
       endTime = formatTimeString(timeMatch[2]);
     } else {
-      const singleTimePattern = /at\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i;
-      const singleMatch = input.match(singleTimePattern);
+      const singleTimePatterns = [
+        /at\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i,
+        /starting\s+at\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i,
+        /beginning\s+at\s+(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i
+      ];
+      
+      let singleMatch = null;
+      for (const pattern of singleTimePatterns) {
+        const match = input.match(pattern);
+        if (match) {
+          singleMatch = match;
+          break;
+        }
+      }
       
       if (singleMatch) {
         startTime = formatTimeString(singleMatch[1]);
-        const startHour = parseInt(startTime.split(':')[0]);
-        const startMinute = parseInt(startTime.split(':')[1]);
-        endTime = `${(startHour + 1).toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+        
+        // Extract duration if mentioned
+        const durationMatch = input.match(/for\s+(\d+)\s*(hour|hr|hours|hrs?)/i);
+        if (durationMatch) {
+          const hours = parseInt(durationMatch[1]);
+          const startHour = parseInt(startTime.split(':')[0]);
+          const startMinute = parseInt(startTime.split(':')[1]);
+          endTime = `${(startHour + hours).toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+        } else {
+          // Default 1 hour
+          const startHour = parseInt(startTime.split(':')[0]);
+          const startMinute = parseInt(startTime.split(':')[1]);
+          endTime = `${(startHour + 1).toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+        }
       }
     }
     
@@ -464,6 +574,52 @@ const ChatInterface = () => {
     }
   };
 
+  const startSpeechRecognition = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast.error("Speech recognition is not supported in your browser");
+      return;
+    }
+
+    // Initialize speech recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
+
+    // Handle results
+    recognitionRef.current.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      setInput(transcript);
+    };
+
+    // Handle end event
+    recognitionRef.current.onend = () => {
+      setIsListening(false);
+    };
+
+    // Handle errors
+    recognitionRef.current.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      toast.error("Speech recognition error: " + event.error);
+    };
+
+    // Start listening
+    recognitionRef.current.start();
+    setIsListening(true);
+    toast.success("Listening...");
+  };
+
+  const stopSpeechRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -517,8 +673,13 @@ const ChatInterface = () => {
       
       <div className="p-3 border-t border-border bg-secondary/30">
         <div className="flex gap-2">
-          <Button variant="outline" size="icon">
-            <Plus className="h-4 w-4" />
+          <Button 
+            variant={isListening ? "destructive" : "outline"} 
+            size="icon" 
+            onClick={isListening ? stopSpeechRecognition : startSpeechRecognition}
+            title={isListening ? "Stop listening" : "Start voice input"}
+          >
+            {isListening ? <StopCircle className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>
           <Input
             value={input}
