@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send, Bot, Plus, Mic, StopCircle, Coffee, Drop, Timer } from 'lucide-react';
+import { Send, Bot, Plus, Mic, StopCircle, Coffee, Droplet, Timer } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -87,34 +86,8 @@ const ChatInterface = () => {
     
     fetchMessages();
 
-    // Load user break preferences if they exist
-    const loadBreakPreferences = async () => {
-      if (!user) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('user_preferences')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-          
-        if (error && error.code !== 'PGSQL_ERROR') {
-          console.error('Error fetching preferences:', error);
-          return;
-        }
-        
-        if (data && data.break_preferences) {
-          setBreakPreferences(data.break_preferences);
-          
-          // Start break timer
-          startBreakTimer(data.break_preferences.workDuration);
-        }
-      } catch (error) {
-        console.error('Failed to fetch preferences:', error);
-      }
-    };
-    
-    loadBreakPreferences();
+    // Load default break preferences
+    startBreakTimer(breakPreferences.workDuration);
 
     return () => {
       if (breakTimer) {
@@ -137,7 +110,7 @@ const ChatInterface = () => {
           <div className="text-sm">Take {breakPreferences.breakDuration} minutes to rest.</div>
           {breakPreferences.remindToDrinkWater && 
             <div className="flex items-center mt-1 text-sm">
-              <Drop className="h-4 w-4 mr-1" /> Remember to drink water
+              <Droplet className="h-4 w-4 mr-1" /> Remember to drink water
             </div>
           }
           {breakPreferences.remindToStretch && 
@@ -170,19 +143,8 @@ const ChatInterface = () => {
     if (!user) return;
     
     try {
-      const { error } = await supabase
-        .from('user_preferences')
-        .upsert({
-          user_id: user.id,
-          break_preferences: prefs,
-          updated_at: new Date().toISOString()
-        });
-        
-      if (error) {
-        console.error('Error saving preferences:', error);
-        toast.error("Failed to save break preferences");
-        return;
-      }
+      // Store break preferences in localStorage since we don't have a user_preferences table yet
+      localStorage.setItem(`breakPreferences_${user.id}`, JSON.stringify(prefs));
       
       setBreakPreferences(prefs);
       startBreakTimer(prefs.workDuration);
@@ -801,299 +763,4 @@ const ChatInterface = () => {
     
     const timeMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?/);
     if (timeMatch) {
-      hours = parseInt(timeMatch[1]);
-      minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      
-      if (isPM && hours < 12) {
-        hours += 12;
-      } else if (isAM && hours === 12) {
-        hours = 0;
-      }
-    }
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  };
-
-  const createTask = async (taskDetails: any) => {
-    if (!user) return { success: false };
-    
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .insert({
-          title: taskDetails.title,
-          due_date: taskDetails.dueDate,
-          priority: taskDetails.priority,
-          course: taskDetails.course,
-          user_id: user.id,
-          completed: false
-        });
-      
-      if (error) {
-        console.error('Error creating task:', error);
-        return { success: false, error };
-      }
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to create task:', error);
-      return { success: false, error };
-    }
-  };
-  
-  const createScheduleItem = async (scheduleDetails: any) => {
-    if (!user) return { success: false };
-    
-    try {
-      const { error } = await supabase
-        .from('schedule_items')
-        .insert({
-          title: scheduleDetails.title,
-          start_time: scheduleDetails.startTime,
-          end_time: scheduleDetails.endTime,
-          category: scheduleDetails.category,
-          user_id: user.id,
-          completed: false
-        });
-      
-      if (error) {
-        console.error('Error creating schedule item:', error);
-        return { success: false, error };
-      }
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to create schedule item:', error);
-      return { success: false, error };
-    }
-  };
-
-  const startSpeechRecognition = () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      toast.error("Speech recognition is not supported in your browser");
-      return;
-    }
-
-    // Initialize speech recognition with proper type handling
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (!SpeechRecognitionAPI) {
-      toast.error("Speech recognition is not available");
-      return;
-    }
-
-    recognitionRef.current = new SpeechRecognitionAPI();
-    
-    if (recognitionRef.current) {
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
-
-      // Handle results
-      recognitionRef.current.onresult = (event) => {
-        const transcript = Array.from(event.results)
-          .map(result => result[0].transcript)
-          .join('');
-        setInput(transcript);
-      };
-
-      // Handle end event
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-
-      // Handle errors
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-        toast.error("Speech recognition error: " + event.error);
-      };
-
-      // Start listening
-      recognitionRef.current.start();
-      setIsListening(true);
-      toast.success("Listening...");
-    }
-  };
-
-  const stopSpeechRecognition = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const getTimeString = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  // Simple break preferences modal
-  const BreakPreferencesModal = () => {
-    const [tempPrefs, setTempPrefs] = useState(breakPreferences);
-    
-    const handleSave = () => {
-      saveBreakPreferences(tempPrefs);
-      setShowBreakModal(false);
-    };
-    
-    return (
-      <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 ${showBreakModal ? 'block' : 'hidden'}`}>
-        <div className="bg-background rounded-lg p-6 w-full max-w-md">
-          <h3 className="text-lg font-bold mb-4">Break Preferences</h3>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Work Duration (minutes)
-                <input 
-                  type="number" 
-                  value={tempPrefs.workDuration}
-                  onChange={(e) => setTempPrefs({...tempPrefs, workDuration: Number(e.target.value) || 30})}
-                  className="mt-1 block w-full rounded-md border-border px-3 py-2 bg-background"
-                  min="15"
-                  max="180"
-                />
-              </label>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Break Duration (minutes)
-                <input 
-                  type="number" 
-                  value={tempPrefs.breakDuration}
-                  onChange={(e) => setTempPrefs({...tempPrefs, breakDuration: Number(e.target.value) || 5})}
-                  className="mt-1 block w-full rounded-md border-border px-3 py-2 bg-background"
-                  min="5"
-                  max="60"
-                />
-              </label>
-            </div>
-            
-            <div className="flex items-center">
-              <input 
-                type="checkbox" 
-                id="drinkWater"
-                checked={tempPrefs.remindToDrinkWater}
-                onChange={(e) => setTempPrefs({...tempPrefs, remindToDrinkWater: e.target.checked})}
-                className="mr-2"
-              />
-              <label htmlFor="drinkWater" className="text-sm">Remind me to drink water</label>
-            </div>
-            
-            <div className="flex items-center">
-              <input 
-                type="checkbox" 
-                id="stretch"
-                checked={tempPrefs.remindToStretch}
-                onChange={(e) => setTempPrefs({...tempPrefs, remindToStretch: e.target.checked})}
-                className="mr-2"
-              />
-              <label htmlFor="stretch" className="text-sm">Remind me to stretch</label>
-            </div>
-            
-            <div className="flex items-center">
-              <input 
-                type="checkbox" 
-                id="restEyes"
-                checked={tempPrefs.remindToRestEyes}
-                onChange={(e) => setTempPrefs({...tempPrefs, remindToRestEyes: e.target.checked})}
-                className="mr-2"
-              />
-              <label htmlFor="restEyes" className="text-sm">Remind me to rest my eyes</label>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={() => setShowBreakModal(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save Preferences</Button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="flex flex-col h-[calc(100vh-150px)] border border-border rounded-lg overflow-hidden bg-card">
-      <div className="p-4 border-b border-border bg-secondary/50">
-        <h2 className="font-bold flex items-center gap-2">
-          <Bot className="h-5 w-5 text-accent" />
-          EduBuddy Chat Assistant
-        </h2>
-      </div>
-      
-      <div className="flex-1 p-4 overflow-y-auto">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "mb-4 max-w-[80%] rounded-lg p-3",
-              message.sender === 'user' 
-                ? "bg-[hsl(var(--chat-user-message-bg))] text-[hsl(var(--chat-user-message-text))] ml-auto" 
-                : "bg-[hsl(var(--chat-ai-message-bg))] text-[hsl(var(--chat-ai-message-text))] mr-auto"
-            )}
-          >
-            <p className="text-sm whitespace-pre-line">{message.content}</p>
-            <span className="text-xs opacity-70 mt-1 block text-right">
-              {getTimeString(message.timestamp)}
-            </span>
-          </div>
-        ))}
-        
-        {isTyping && (
-          <div className="mb-4 max-w-[80%] rounded-lg p-3 bg-[hsl(var(--chat-ai-message-bg))] text-[hsl(var(--chat-ai-message-text))] mr-auto">
-            <div className="flex gap-1">
-              <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light"></div>
-              <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light delay-150"></div>
-              <div className="w-2 h-2 rounded-full bg-accent animate-pulse-light delay-300"></div>
-            </div>
-          </div>
-        )}
-        
-        <div ref={endOfMessagesRef} />
-      </div>
-      
-      <div className="p-3 border-t border-border bg-secondary/30">
-        <div className="flex gap-2">
-          <Button 
-            variant={isListening ? "destructive" : "outline"} 
-            size="icon" 
-            onClick={isListening ? stopSpeechRecognition : startSpeechRecognition}
-            title={isListening ? "Stop listening" : "Start voice input"}
-          >
-            {isListening ? <StopCircle className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setShowBreakModal(true)}
-            title="Configure break reminders"
-          >
-            <Timer className="h-4 w-4" />
-          </Button>
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message EduBuddy..."
-            className="flex-1"
-          />
-          <Button onClick={handleSendMessage} disabled={!input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      
-      {showBreakModal && <BreakPreferencesModal />}
-    </div>
-  );
-};
-
-export default ChatInterface;
+      hours = parseInt(
