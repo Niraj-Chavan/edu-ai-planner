@@ -87,8 +87,21 @@ const ChatInterface = () => {
     
     fetchMessages();
 
-    // Load default break preferences
-    startBreakTimer(breakPreferences.workDuration);
+    // Load break preferences from localStorage
+    const savedPrefs = localStorage.getItem(`breakPreferences_${user?.id}`);
+    if (savedPrefs) {
+      try {
+        const parsedPrefs = JSON.parse(savedPrefs);
+        setBreakPreferences(parsedPrefs);
+        startBreakTimer(parsedPrefs.workDuration);
+      } catch (e) {
+        console.error('Failed to parse saved break preferences:', e);
+        startBreakTimer(breakPreferences.workDuration);
+      }
+    } else {
+      // Load default break preferences
+      startBreakTimer(breakPreferences.workDuration);
+    }
 
     return () => {
       if (breakTimer) {
@@ -269,6 +282,26 @@ const ChatInterface = () => {
       
       return "I can help you configure your break preferences. How long would you like to work before taking breaks? And how long should your breaks be?";
     }
+
+    // Enhanced Task Detection
+    if (detectTaskRequest(userInput)) {
+      const taskDetails = extractTaskDetails(userInput);
+      
+      // Create the task in Supabase
+      const taskCreated = await createTaskInDatabase(taskDetails);
+      
+      if (taskCreated.success) {
+        // Find the best time to schedule this task based on user's patterns
+        const recommendedSlots = await findOptimalTimeSlots(taskDetails);
+        
+        // Find relevant resources for this task
+        const resources = await findRelevantResources(taskDetails);
+        
+        return `I've added "${taskDetails.title}" to your upcoming deadlines with a due date of ${formatDate(new Date(taskDetails.dueDate))} and ${taskDetails.priority} priority.\n\n${recommendedSlots}\n\nHere are some resources that might help you prepare:\n${resources.map((r, i) => `${i+1}. [${r.title}](${r.url}) - ${r.description}`).join('\n')}\n\nWould you like me to schedule a specific work session for this task?`;
+      } else {
+        return "I tried to add your task but encountered an issue. Please try providing more details like the title, due date, and subject.";
+      }
+    }
     
     // Work schedule optimization
     if (containsAny(input, ['when', 'best time', 'optimal', 'suggest', 'recommend']) &&
@@ -290,25 +323,6 @@ const ChatInterface = () => {
       }
       
       return `${suggestion}\n\nWould you like me to help schedule specific work blocks in your calendar based on these optimal times?`;
-    }
-    
-    // Improved Task Management
-    if (containsAny(input, ['add', 'create', 'set', 'new', 'make', 'schedule', 'put']) &&
-        containsAny(input, ['assignment', 'project', 'task', 'homework', 'essay', 'report', 'presentation'])) {
-      
-      const taskDetails = extractTaskDetails(userInput);
-      const taskResult = await createTask(taskDetails);
-      
-      if (taskResult.success) {
-        toast.success("Task added to your schedule");
-        
-        // Add intelligent scheduling suggestions
-        const suggestedTime = getSuggestedTimeForTask(taskDetails);
-        
-        return `I've added "${taskDetails.title}" to your task list with a due date of ${formatDate(new Date(taskDetails.dueDate))}. It has been set as ${taskDetails.priority} priority.\n\n${suggestedTime}\n\nWould you like me to help you schedule focused work sessions for this task?`;
-      } else {
-        return "I couldn't add your task. Please try again with more details like the title, due date and priority.";
-      }
     }
     
     // Schedule Planning with improved suggestions
@@ -349,7 +363,161 @@ const ChatInterface = () => {
     }
     
     // General Help
-    return "I'm here to help organize your academic schedule and optimize your productivity. You can ask me to add tasks, schedule study sessions with optimal break intervals, or suggest when to work on specific subjects based on your productivity patterns. For example, try saying 'When is the best time to study math?' or 'Schedule a focused study session for tomorrow'.";
+    return "I'm here to help organize your academic schedule and optimize your productivity. You can ask me to add tasks, schedule study sessions with optimal break intervals, or suggest when to work on specific subjects based on your productivity patterns. For example, try saying 'I have a presentation on Data Analysis due Friday' or 'Schedule a focused study session for tomorrow'.";
+  };
+
+  // New function to detect if the user is requesting to add a task
+  const detectTaskRequest = (input: string): boolean => {
+    const addTaskPatterns = [
+      // Assignment/task mentions
+      /have\s+an?\s+(assignment|project|task|presentation|essay|report|homework)/i,
+      /need\s+to\s+(do|finish|complete|submit|prepare)\s+an?\s+(assignment|project|task|presentation|essay|report|homework)/i,
+      /add\s+an?\s+(assignment|project|task|presentation|essay|report|homework)/i,
+      /due\s+(on|by)\s+/i,
+      /deadline\s+(on|for|is)/i,
+      /coming\s+up\s+(on|next)/i,
+      // Date mentions that often indicate tasks
+      /(tomorrow|next week|this weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i
+    ];
+    
+    return addTaskPatterns.some(pattern => pattern.test(input));
+  };
+
+  // New function to create a task in the database
+  const createTaskInDatabase = async (taskDetails: any) => {
+    if (!user) return { success: false };
+    
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .insert({
+          title: taskDetails.title,
+          course: taskDetails.course,
+          due_date: taskDetails.dueDate,
+          priority: taskDetails.priority,
+          user_id: user.id,
+          completed: false
+        });
+      
+      if (error) {
+        console.error('Error adding task:', error);
+        return { success: false, error };
+      }
+      
+      toast.success("Task added to your deadlines!");
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to add task:', error);
+      return { success: false, error };
+    }
+  };
+
+  // New function to find the best time slots for a task
+  const findOptimalTimeSlots = async (taskDetails: any) => {
+    if (!user) return "I recommend scheduling this task when you're most productive.";
+    
+    const now = new Date();
+    const dueDate = new Date(taskDetails.dueDate);
+    const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Calculate estimated time needed based on task type and priority
+    let estimatedHours = 2; // Default
+    
+    if (taskDetails.title.toLowerCase().includes('presentation')) {
+      estimatedHours = 3; // Presentations typically need more time
+    } else if (taskDetails.title.toLowerCase().includes('essay')) {
+      estimatedHours = 4; // Essays are usually longer
+    } else if (taskDetails.title.toLowerCase().includes('quiz') || 
+               taskDetails.title.toLowerCase().includes('test')) {
+      estimatedHours = 2.5; // Study time for tests
+    }
+    
+    // Adjust based on priority
+    if (taskDetails.priority === 'high') {
+      estimatedHours += 1;
+    } else if (taskDetails.priority === 'low') {
+      estimatedHours -= 0.5;
+    }
+    
+    // Generate recommendations
+    let recommendation = `I estimate this task will require about ${estimatedHours} hours to complete.`;
+    
+    // If due very soon, recommend urgent scheduling
+    if (daysUntilDue <= 1) {
+      recommendation += " Since this is due very soon, I recommend working on it today.";
+      
+      const currentHour = now.getHours();
+      if (currentHour < 12) {
+        recommendation += " Try to allocate time this afternoon between 2-5 PM.";
+      } else if (currentHour < 17) {
+        recommendation += " You should start on this as soon as possible, and possibly continue in the evening.";
+      } else {
+        recommendation += " Consider scheduling a focused evening session tonight from 7-9 PM.";
+      }
+    } else if (daysUntilDue <= 3) {
+      // For tasks due within 3 days
+      recommendation += " I suggest breaking this up into 2 sessions:";
+      recommendation += "\n• Tomorrow: 1.5 hour session in the morning (9-10:30 AM)";
+      recommendation += "\n• Day after: 1.5 hour session in the afternoon (2-3:30 PM)";
+    } else {
+      // For tasks with more time
+      recommendation += " You have some time before this is due. I suggest:";
+      recommendation += "\n• First session: Tomorrow from 4-5 PM for initial planning";
+      recommendation += "\n• Main work: 2 hour block on " + formatDayOfWeek(now.getDay() + 2) + " morning";
+      recommendation += "\n• Final review: 1 hour on " + formatDayOfWeek(now.getDay() + 4) + " afternoon";
+    }
+    
+    return recommendation;
+  };
+
+  // Helper to format day of week
+  const formatDayOfWeek = (dayNum: number) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[dayNum % 7];
+  };
+
+  // New function to find relevant resources for a task
+  const findRelevantResources = async (taskDetails: any) => {
+    // Extract keywords from task details
+    const keywords = extractKeywords(taskDetails.title + " " + taskDetails.course);
+    
+    // In a real app, this would query an external API or database
+    // For now, we'll generate mock resources based on the task details
+    
+    // Generate resources specific to the task type and subject
+    return [
+      {
+        title: `${keywords[0]} explained - Complete guide`,
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(keywords.join('+'))}`,
+        description: `Comprehensive YouTube tutorials on ${keywords[0]}`
+      },
+      {
+        title: `Best practices for ${taskDetails.title.split(' ').slice(0, 3).join(' ')}`,
+        url: `https://scholar.google.com/scholar?q=${encodeURIComponent(keywords.join('+'))}`,
+        description: 'Academic resources and research papers'
+      },
+      {
+        title: `${taskDetails.course} learning resources`,
+        url: `https://www.coursera.org/search?query=${encodeURIComponent(taskDetails.course)}`,
+        description: 'Online courses and specialized materials'
+      }
+    ];
+  };
+
+  // Helper function to extract keywords from text
+  const extractKeywords = (text: string): string[] => {
+    // Remove common words and extract key terms
+    const commonWords = ['a', 'an', 'the', 'in', 'on', 'at', 'for', 'to', 'of', 'and', 'or', 'my', 'our', 'your'];
+    
+    return text
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(word => 
+        word.length > 3 && 
+        !commonWords.includes(word) &&
+        !/^\d+$/.test(word)
+      )
+      .slice(0, 5); // Take top 5 keywords
   };
 
   const getSuggestedTimeForTask = (taskDetails: any): string => {
@@ -440,7 +608,8 @@ const ChatInterface = () => {
       'english', 'literature', 'writing', 'grammar', 'poetry', 'shakespeare',
       'computer science', 'programming', 'coding', 'data structures', 'algorithms',
       'music', 'art', 'photography', 'design', 'architecture',
-      'foreign language', 'spanish', 'french', 'german', 'chinese', 'japanese'
+      'foreign language', 'spanish', 'french', 'german', 'chinese', 'japanese',
+      'data analysis', 'analytics', 'business intelligence', 'machine learning', 'AI'
     ];
     
     for (const subject of commonSubjects) {
@@ -475,6 +644,11 @@ const ChatInterface = () => {
         article: 'dev.to\'s "Data Structures Explained" series - Visual explanations of essential programming concepts',
         book: '"Clean Code" by Robert C. Martin - Industry-standard practices for writing maintainable code'
       },
+      'data analysis': {
+        video: 'DataCamp\'s "Introduction to Data Analysis" - Step-by-step tutorials with practical examples',
+        article: 'Towards Data Science\'s "Data Analysis Workflow" - Comprehensive methodology for analysis',
+        book: '"Python for Data Analysis" by Wes McKinney - Essential techniques using Python and pandas'
+      },
       default: {
         video: `Top-rated ${subject} course on educational platforms`,
         article: `Comprehensive ${subject} guide from academic journals`,
@@ -483,7 +657,11 @@ const ChatInterface = () => {
     };
     
     // Get resources for the specific subject or use default
-    const subjectResources = resources[subject.toLowerCase() as keyof typeof resources] || resources.default;
+    const subjectKey = Object.keys(resources).find(key => 
+      subject.toLowerCase().includes(key)
+    ) || 'default';
+    
+    const subjectResources = resources[subjectKey as keyof typeof resources] || resources.default;
     return subjectResources[type];
   };
 
@@ -508,16 +686,19 @@ const ChatInterface = () => {
     
     const words = input.split(' ');
     
-    // Better course detection
+    // Enhanced course detection
     const possibleCourses = words.filter(word => 
       /^[A-Z]{2,7}\d{3}$/i.test(word) || /^[A-Z]{2,4}$/i.test(word)
     );
     if (possibleCourses.length > 0) {
       course = possibleCourses[0].toUpperCase();
     } else {
-      const subjects = ['math', 'science', 'history', 'english', 'physics', 'chemistry', 
-                        'biology', 'literature', 'computer', 'psychology', 'philosophy', 
-                        'economics', 'business', 'art', 'music', 'geography'];
+      const subjects = [
+        'math', 'science', 'history', 'english', 'physics', 'chemistry', 
+        'biology', 'literature', 'computer', 'psychology', 'philosophy', 
+        'economics', 'business', 'art', 'music', 'geography',
+        'data analysis', 'analytics', 'statistics', 'research'
+      ];
       for (const subject of subjects) {
         if (input.toLowerCase().includes(subject)) {
           course = subject.charAt(0).toUpperCase() + subject.slice(1);
@@ -526,58 +707,68 @@ const ChatInterface = () => {
       }
     }
     
-    // Improved title extraction
-    if (input.includes('add') && input.includes('due')) {
-      const addIndex = input.indexOf('add') + 3;
-      const dueIndex = input.indexOf('due');
-      if (dueIndex > addIndex) {
-        title = input.substring(addIndex, dueIndex).trim();
+    // Improved title extraction with better inference
+    if (input.includes('presentation') || input.includes('present')) {
+      const presentationMatch = input.match(/presentation\s+(?:on|about)\s+(\w+(?:\s+\w+){0,6})/i);
+      if (presentationMatch) {
+        title = `${course} Presentation: ${presentationMatch[1]}`;
+      } else {
+        title = `${course} Presentation`;
       }
-    } else if (input.includes('called') || input.includes('titled') || input.includes('named')) {
-      const keywordIndices = [
-        input.indexOf('called') !== -1 ? input.indexOf('called') + 6 : -1,
-        input.indexOf('titled') !== -1 ? input.indexOf('titled') + 6 : -1,
-        input.indexOf('named') !== -1 ? input.indexOf('named') + 5 : -1
-      ].filter(idx => idx !== -1);
-      
-      if (keywordIndices.length > 0) {
-        const keywordIndex = Math.min(...keywordIndices);
-        title = input.substring(keywordIndex).trim();
-        const endTerms = [' due ', ' priority ', ' for course ', ' by ', ' on ', ' at '];
-        for (const term of endTerms) {
-          if (title.includes(term)) {
-            title = title.substring(0, title.indexOf(term));
-          }
-        }
+    } else if (input.includes('essay') || input.includes('write') || input.includes('writing')) {
+      const essayMatch = input.match(/(?:essay|write|writing)\s+(?:on|about)\s+(\w+(?:\s+\w+){0,6})/i);
+      if (essayMatch) {
+        title = `${course} Essay: ${essayMatch[1]}`;
+      } else {
+        title = `${course} Essay`;
       }
-    }
-    
-    if (title === "New Task" || title.length < 3) {
-      // Extract a more meaningful title from the input
-      const commonWords = ['add', 'create', 'new', 'task', 'assignment', 'project', 'homework', 
-                         'for', 'me', 'my', 'due', 'please', 'can', 'you', 'would', 'could'];
-      const meaningful = words.filter(word => 
-        !commonWords.includes(word.toLowerCase())
-      );
-      if (meaningful.length > 0) {
-        title = meaningful.slice(0, 3).join(' ');
-        title = title.charAt(0).toUpperCase() + title.slice(1);
+    } else if (input.includes('project') || input.includes('assignment')) {
+      const projectMatch = input.match(/(?:project|assignment)\s+(?:on|about)\s+(\w+(?:\s+\w+){0,6})/i);
+      if (projectMatch) {
+        title = `${course} Project: ${projectMatch[1]}`;
+      } else {
+        title = `${course} Project`;
+      }
+    } else if (input.includes('homework') || input.includes('problem set')) {
+      title = `${course} Homework`;
+    } else if (input.includes('research') || input.includes('study')) {
+      title = `${course} Research`;
+    } else {
+      // Generic title with subject matter if detected
+      const topicMatch = input.match(/(?:on|about)\s+(?:the\s+)?(\w+(?:\s+\w+){0,6})/i);
+      if (topicMatch) {
+        title = `${course}: ${topicMatch[1]}`;
+      } else {
+        title = `${course} Assignment`;
       }
     }
     
-    // Enhanced due date parsing
-    const dueText = input.includes('due') ? 
-      input.substring(input.indexOf('due') + 3).trim() : 
-      input.includes('by') ? 
-        input.substring(input.indexOf('by') + 2).trim() : input;
-    dueDate = parseDueDate(dueText);
+    // Enhanced due date parsing with better extraction
+    const datePatterns = [
+      // Explicit date mentions
+      /due\s+(?:on|by)?\s+(?:this|next)?\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+      /due\s+(?:on|by)?\s+(?:the)?\s+(\d{1,2})(?:st|nd|rd|th)?\s+(?:of)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i,
+      // Relative date mentions
+      /due\s+(?:on|by)?\s+(tomorrow|this weekend|next week)/i,
+      // MM/DD format
+      /due\s+(?:on|by)?\s+(\d{1,2})\/(\d{1,2})/i,
+      // "on Friday" / "next Monday" patterns
+      /\b(?:on|this|next)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i
+    ];
+    
+    // Check each pattern for a match
+    for (const pattern of datePatterns) {
+      const match = input.match(pattern);
+      if (match) {
+        dueDate = parseDueDate(match[0]);
+        break;
+      }
+    }
     
     // Better priority detection
-    if (input.includes('high priority') || input.includes('important') || 
-        input.includes('urgent') || input.includes('critical')) {
+    if (containsAny(input, ['high priority', 'important', 'urgent', 'critical', 'asap', 'as soon as possible'])) {
       priority = "high";
-    } else if (input.includes('low priority') || input.includes('not urgent') || 
-               input.includes('not important') || input.includes('can wait')) {
+    } else if (containsAny(input, ['low priority', 'not urgent', 'not important', 'can wait', 'whenever'])) {
       priority = "low";
     }
     
@@ -684,7 +875,8 @@ const ChatInterface = () => {
     // Enhanced subject detection
     const subjects = ['math', 'science', 'history', 'english', 'physics', 'chemistry', 
                       'biology', 'literature', 'computer', 'calculus', 'algebra', 
-                      'psychology', 'philosophy', 'economics', 'business', 'art', 'music'];
+                      'psychology', 'philosophy', 'economics', 'business', 'art', 'music',
+                      'data analysis', 'analytics', 'statistics', 'research'];
     for (const subject of subjects) {
       if (input.toLowerCase().includes(subject)) {
         title = `${subject.charAt(0).toUpperCase() + subject.slice(1)} ${category === 'class' ? 'Class' : 'Study'}`;
@@ -777,7 +969,7 @@ const ChatInterface = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
-  // Mock functions for creating tasks and schedule items (since we don't have real tables yet)
+  // Mock functions for creating tasks and schedule items
   const createTask = async (taskDetails: any) => {
     // In a real app, this would save to a tasks table
     console.log('Creating task:', taskDetails);
@@ -785,9 +977,30 @@ const ChatInterface = () => {
   };
 
   const createScheduleItem = async (scheduleDetails: any) => {
-    // In a real app, this would save to a schedule_items table
-    console.log('Creating schedule item:', scheduleDetails);
-    return { success: true };
+    if (!user) return { success: false };
+    
+    try {
+      const { error } = await supabase
+        .from('schedule_items')
+        .insert({
+          title: scheduleDetails.title,
+          start_time: scheduleDetails.startTime,
+          end_time: scheduleDetails.endTime,
+          category: scheduleDetails.category,
+          user_id: user.id,
+          completed: false
+        });
+      
+      if (error) {
+        console.error('Error adding schedule item:', error);
+        return { success: false };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to add schedule item:', error);
+      return { success: false };
+    }
   };
 
   // Speech recognition functions
@@ -853,8 +1066,8 @@ const ChatInterface = () => {
               className={cn(
                 "flex items-start gap-3 rounded-lg p-3",
                 message.sender === 'user' 
-                  ? "bg-accent text-white ml-6 bg-chat-user-message-bg text-chat-user-message-text" 
-                  : "bg-secondary mr-6 bg-chat-ai-message-bg text-chat-ai-message-text"
+                  ? "bg-accent text-accent-foreground ml-6" 
+                  : "bg-secondary text-secondary-foreground mr-6"
               )}
             >
               {message.sender === 'ai' ? (

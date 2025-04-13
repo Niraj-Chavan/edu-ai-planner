@@ -13,6 +13,7 @@ interface Resource {
   type: 'video' | 'article' | 'book' | 'pdf';
   url: string;
   relevance: number; // 1-100
+  description?: string;
 }
 
 const ResourceSuggestions = () => {
@@ -41,8 +42,7 @@ const ResourceSuggestions = () => {
         ? [...new Set(tasksData.map(task => task.course || 'General'))]
         : ['General'];
       
-      // In a real app, you would fetch resources from an API or database
-      // based on these courses. For demo, we'll generate them.
+      // Generate resources based on user's active courses
       const generatedResources = generateResourcesForCourses(courses);
       setResources(generatedResources);
     } catch (error) {
@@ -67,46 +67,166 @@ const ResourceSuggestions = () => {
   const generateResourcesForCourses = (courses: string[]): Resource[] => {
     const allResources: Resource[] = [];
     
-    // Resource templates by subject area
+    // Enhanced resource templates with more detailed descriptions
     const resourceTemplates = {
       Math: [
-        { title: 'Calculus Made Easy', type: 'video', url: 'https://example.com/calculus' },
-        { title: 'Advanced Algebra Techniques', type: 'pdf', url: 'https://example.com/algebra' },
-        { title: 'Statistics for Data Science', type: 'article', url: 'https://example.com/stats' }
+        { 
+          title: 'Calculus Made Easy', 
+          type: 'video', 
+          url: 'https://www.youtube.com/results?search_query=calculus+made+easy',
+          description: 'Step-by-step video tutorials covering differentiation, integration, and applications'
+        },
+        { 
+          title: 'Advanced Algebra Techniques', 
+          type: 'pdf', 
+          url: 'https://example.com/algebra',
+          description: 'Comprehensive guide to algebraic methods with practice problems'
+        },
+        { 
+          title: 'Statistics for Data Science', 
+          type: 'article', 
+          url: 'https://towardsdatascience.com/statistics-for-data-scientists-8ef000255d71',
+          description: 'Modern statistical concepts applied to data analysis problems'
+        }
       ],
       Science: [
-        { title: 'Physics Fundamentals', type: 'video', url: 'https://example.com/physics' },
-        { title: 'Chemistry Lab Preparation', type: 'pdf', url: 'https://example.com/chemistry' },
-        { title: 'Biology Study Guide', type: 'book', url: 'https://example.com/biology' }
+        { 
+          title: 'Physics Fundamentals', 
+          type: 'video', 
+          url: 'https://www.youtube.com/results?search_query=physics+fundamentals',
+          description: 'Visual explanations of core physics principles with demonstrations'
+        },
+        { 
+          title: 'Chemistry Lab Preparation', 
+          type: 'pdf', 
+          url: 'https://example.com/chemistry',
+          description: 'Laboratory techniques and safety procedures for chemistry experiments'
+        },
+        { 
+          title: 'Biology Study Guide', 
+          type: 'book', 
+          url: 'https://openstax.org/details/books/biology-2e',
+          description: 'Comprehensive textbook covering cellular biology through ecology'
+        }
       ],
       Computer: [
-        { title: 'Introduction to Algorithms', type: 'book', url: 'https://example.com/algorithms' },
-        { title: 'Web Development Bootcamp', type: 'video', url: 'https://example.com/webdev' },
-        { title: 'Machine Learning Foundations', type: 'article', url: 'https://example.com/ml' }
+        { 
+          title: 'Introduction to Algorithms', 
+          type: 'book', 
+          url: 'https://mitpress.mit.edu/books/introduction-algorithms-third-edition',
+          description: 'Classic textbook on algorithm design and analysis with pseudocode'
+        },
+        { 
+          title: 'Web Development Bootcamp', 
+          type: 'video', 
+          url: 'https://www.youtube.com/results?search_query=web+development+bootcamp',
+          description: 'Full course covering HTML, CSS, JavaScript, and modern frameworks'
+        },
+        { 
+          title: 'Machine Learning Foundations', 
+          type: 'article', 
+          url: 'https://www.kaggle.com/learn/intro-to-machine-learning',
+          description: 'Introductory concepts in machine learning with practical examples'
+        }
       ],
       History: [
-        { title: 'World War II Documentary', type: 'video', url: 'https://example.com/ww2' },
-        { title: 'Ancient Civilizations', type: 'book', url: 'https://example.com/ancient' },
-        { title: 'American History Timeline', type: 'pdf', url: 'https://example.com/us-history' }
+        { 
+          title: 'World War II Documentary', 
+          type: 'video', 
+          url: 'https://www.youtube.com/results?search_query=world+war+ii+documentary',
+          description: 'In-depth historical footage and expert analysis of key events'
+        },
+        { 
+          title: 'Ancient Civilizations', 
+          type: 'book', 
+          url: 'https://example.com/ancient',
+          description: 'Comparative study of early human civilizations and their development'
+        },
+        { 
+          title: 'American History Timeline', 
+          type: 'pdf', 
+          url: 'https://example.com/us-history',
+          description: 'Chronological presentation of major events in American history'
+        }
       ],
       English: [
-        { title: 'Essay Writing Workshop', type: 'video', url: 'https://example.com/essay' },
-        { title: 'Literature Analysis Guide', type: 'pdf', url: 'https://example.com/literature' },
-        { title: 'Grammar Masterclass', type: 'article', url: 'https://example.com/grammar' }
+        { 
+          title: 'Essay Writing Workshop', 
+          type: 'video', 
+          url: 'https://www.youtube.com/results?search_query=essay+writing+techniques',
+          description: 'Techniques for structuring arguments and improving prose style'
+        },
+        { 
+          title: 'Literature Analysis Guide', 
+          type: 'pdf', 
+          url: 'https://example.com/literature',
+          description: 'Methods for close reading and interpretation of literary texts'
+        },
+        { 
+          title: 'Grammar Masterclass', 
+          type: 'article', 
+          url: 'https://example.com/grammar',
+          description: 'Comprehensive coverage of English grammar rules and exceptions'
+        }
+      ],
+      "Data Analysis": [
+        { 
+          title: 'Data Science with Python', 
+          type: 'video', 
+          url: 'https://www.youtube.com/results?search_query=data+science+python',
+          description: 'Hands-on tutorials using pandas, numpy, and visualization tools'
+        },
+        { 
+          title: 'Statistical Analysis Methods', 
+          type: 'article', 
+          url: 'https://towardsdatascience.com/statistical-analysis-for-data-science-4d1d0ead0350',
+          description: 'Practical guide to applying statistical tests to real-world data'
+        },
+        { 
+          title: 'Data Visualization Techniques', 
+          type: 'book', 
+          url: 'https://example.com/data-viz',
+          description: 'Principles of effective data visualization with code examples'
+        }
       ],
       General: [
-        { title: 'Effective Study Techniques', type: 'video', url: 'https://example.com/study' },
-        { title: 'Note-Taking Strategies', type: 'article', url: 'https://example.com/notes' },
-        { title: 'Time Management for Students', type: 'book', url: 'https://example.com/time' }
+        { 
+          title: 'Effective Study Techniques', 
+          type: 'video', 
+          url: 'https://www.youtube.com/results?search_query=effective+study+techniques',
+          description: 'Research-backed methods to improve retention and understanding'
+        },
+        { 
+          title: 'Note-Taking Strategies', 
+          type: 'article', 
+          url: 'https://learningcenter.unc.edu/tips-and-tools/effective-note-taking-in-class/',
+          description: 'Different systems for capturing and organizing information'
+        },
+        { 
+          title: 'Time Management for Students', 
+          type: 'book', 
+          url: 'https://example.com/time',
+          description: 'Structured approaches to planning and prioritizing academic work'
+        }
       ]
     };
     
     // Generate resources based on courses
     for (const course of courses) {
       // Find matching template category
-      const templateKey = Object.keys(resourceTemplates).find(key => 
-        course.toLowerCase().includes(key.toLowerCase())
-      ) || 'General';
+      let templateKey = 'General';
+      for (const key of Object.keys(resourceTemplates)) {
+        if (course.toLowerCase().includes(key.toLowerCase())) {
+          templateKey = key;
+          break;
+        }
+      }
+      
+      // Special case for data analysis/analytics
+      if (course.toLowerCase().includes('data') && 
+         (course.toLowerCase().includes('analysis') || course.toLowerCase().includes('analytics'))) {
+        templateKey = 'Data Analysis';
+      }
       
       // Get resource templates
       const templates = resourceTemplates[templateKey as keyof typeof resourceTemplates];
@@ -124,7 +244,8 @@ const ResourceSuggestions = () => {
           title,
           type: template.type as Resource['type'],
           url: template.url,
-          relevance: Math.floor(Math.random() * 25) + 75 // 75-99% relevance
+          relevance: Math.floor(Math.random() * 25) + 75, // 75-99% relevance
+          description: template.description
         });
       }
     }
@@ -141,29 +262,33 @@ const ResourceSuggestions = () => {
         id: '1',
         title: 'Advanced Calculus Explained Simply',
         type: 'video',
-        url: 'https://example.com/calculus',
-        relevance: 95
+        url: 'https://www.youtube.com/results?search_query=advanced+calculus+explained',
+        relevance: 95,
+        description: 'Visual explanations of complex calculus concepts'
       },
       {
         id: '2',
         title: 'Understanding Neural Networks',
         type: 'article',
-        url: 'https://example.com/neural-networks',
-        relevance: 87
+        url: 'https://towardsdatascience.com/understanding-neural-networks-19020b758230',
+        relevance: 87,
+        description: 'From perceptrons to deep learning architectures'
       },
       {
         id: '3',
         title: 'Physics Fundamentals: Chapter 7 Notes',
         type: 'pdf',
         url: 'https://example.com/physics-ch7',
-        relevance: 82
+        relevance: 82,
+        description: 'Comprehensive notes on electromagnetic theory'
       },
       {
         id: '4',
         title: 'Data Structures and Algorithms',
         type: 'book',
         url: 'https://example.com/dsa',
-        relevance: 75
+        relevance: 75,
+        description: 'Implementation strategies in multiple programming languages'
       }
     ];
   };
@@ -223,7 +348,7 @@ const ResourceSuggestions = () => {
                 key={resource.id}
                 className="p-3 border border-border rounded-md hover:bg-secondary/20 transition-colors"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   <div className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center",
                     resource.type === 'video' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -244,6 +369,13 @@ const ResourceSuggestions = () => {
                         {resource.relevance}%
                       </span>
                     </div>
+                    
+                    {resource.description && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {resource.description}
+                      </p>
+                    )}
+                    
                     <div className="flex items-center mt-1">
                       <span className="text-xs capitalize text-muted-foreground">
                         {resource.type}

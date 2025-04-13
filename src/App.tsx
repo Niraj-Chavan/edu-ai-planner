@@ -18,9 +18,14 @@ import Settings from "./pages/Settings";
 const queryClient = new QueryClient();
 
 const App = () => {
-  // Set default dark theme
+  // Set dark theme by default
   useEffect(() => {
+    // Apply dark theme as default
     document.documentElement.classList.add('dark');
+    document.documentElement.style.colorScheme = 'dark';
+    
+    // Store the preference in localStorage to persist across visits
+    localStorage.setItem('theme', 'dark');
   }, []);
 
   return (

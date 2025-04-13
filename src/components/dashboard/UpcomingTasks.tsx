@@ -8,6 +8,7 @@ import type { Database } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
+import { useNavigate } from 'react-router-dom';
 
 interface UpcomingTask {
   id: string;
@@ -24,6 +25,7 @@ const UpcomingTasks = () => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<UpcomingTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -132,11 +134,11 @@ const UpcomingTasks = () => {
   const getPriorityBadgeClass = (priority: UpcomingTask['priority']) => {
     switch (priority) {
       case 'high':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300';
       case 'medium':
-        return 'bg-amber-100 text-amber-800';
+        return 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300';
       case 'low':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300';
     }
   };
 
@@ -161,6 +163,18 @@ const UpcomingTasks = () => {
     }
   };
 
+  const goToAIChat = () => {
+    navigate('/');
+    // Slight delay to allow the page to render before focusing
+    setTimeout(() => {
+      const chatInput = document.querySelector('input[placeholder*="schedule"]') as HTMLInputElement;
+      if (chatInput) {
+        chatInput.focus();
+        chatInput.value = "Add a new task called ";
+      }
+    }, 300);
+  };
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -173,7 +187,7 @@ const UpcomingTasks = () => {
             variant="ghost"
             size="sm"
             className="h-8 gap-1"
-            onClick={() => toast.info("Chat with the AI to add tasks!")}
+            onClick={goToAIChat}
           >
             <Plus className="h-4 w-4" /> Add Task
           </Button>
@@ -238,7 +252,7 @@ const UpcomingTasks = () => {
                       </span>
                       <span className={cn(
                         "ml-2 flex items-center gap-1",
-                        dueInfo.urgent && !task.completed && "text-red-600"
+                        dueInfo.urgent && !task.completed && "text-red-600 dark:text-red-400"
                       )}>
                         {dueInfo.urgent && !task.completed && <AlertCircle className="h-3 w-3" />}
                         {dueInfo.text}
